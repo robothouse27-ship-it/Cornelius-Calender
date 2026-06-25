@@ -1,0 +1,11 @@
+[Unit]
+Description=Family Calendar feed fetcher (one-shot, run by timer + at boot)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=__USER__
+WorkingDirectory=__APPDIR__
+ExecStart=__APPDIR__/.venv/bin/python __APPDIR__/fetcher.py
+Environment=FAMILYCAL_TZ=America/Los_Angeles

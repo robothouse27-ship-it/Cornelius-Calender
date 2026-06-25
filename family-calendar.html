@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Our Family Calendar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     THEME TOKENS  — tweak these to restyle the whole app
+     ============================================================ */
+  :root{
+    --bg-1:#F3F1FF;            /* page wash top    */
+    --bg-2:#FFF2FA;           /* page wash bottom */
+    --surface:#FFFFFF;        /* cards            */
+    --ink:#3A3357;            /* primary text (deep plum, never pure black) */
+    --ink-soft:#8C84AB;       /* secondary text   */
+    --line:#EFEAFB;           /* hairlines        */
+
+    /* candy family palette */
+    --sky:#6FB8F6;   --sky-soft:#DCEEFF;
+    --rose:#FF8FBE;  --rose-soft:#FFE2EF;
+    --mint:#46D6B4;  --mint-soft:#D5F7EE;
+    --butter:#FFC44D;--butter-soft:#FFF0CC;
+    --lav:#A98CFF;   --lav-soft:#ECE4FF;
+    --peach:#FF9E7A; --peach-soft:#FFE5DA;
+
+    --radius:26px;
+    --radius-sm:18px;
+    --shadow-soft:0 10px 30px rgba(94,72,150,.12), 0 2px 6px rgba(94,72,150,.08);
+    --shadow-pop:0 14px 0 rgba(0,0,0,.05);
+    --grad-hero:linear-gradient(120deg,#FFB3D1 0%,#B39CFF 50%,#8FD0FF 100%);
+  }
+
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;margin:0;}
+  body{
+    font-family:"Nunito",system-ui,-apple-system,sans-serif;
+    color:var(--ink);
+    background:linear-gradient(160deg,var(--bg-1),var(--bg-2));
+    overflow:hidden;
+    user-select:none;
+  }
+  .display{font-family:"Fredoka",system-ui,sans-serif;}
+
+  /* ===================== APP SHELL ===================== */
+  #app{height:100vh;display:flex;flex-direction:column;padding:18px 20px 14px;gap:14px;}
+
+  /* ---- Top bar ---- */
+  .topbar{display:flex;align-items:center;gap:16px;}
+  .greet{flex:1;min-width:0;}
+  .greet .hello{font-family:"Fredoka";font-weight:600;font-size:clamp(22px,3.2vw,34px);line-height:1.05;}
+  .greet .sub{color:var(--ink-soft);font-weight:700;font-size:clamp(13px,1.4vw,16px);margin-top:2px;}
+  .chip{
+    background:var(--surface);border-radius:var(--radius-sm);padding:10px 16px;
+    box-shadow:var(--shadow-soft);display:flex;align-items:center;gap:10px;white-space:nowrap;
+  }
+  .chip .big{font-family:"Fredoka";font-weight:600;font-size:clamp(20px,2.6vw,30px);}
+  .weather .emoji{font-size:26px;}
+  .clock .ampm{font-size:14px;color:var(--ink-soft);font-weight:700;align-self:flex-end;margin-bottom:5px;}
+
+  /* ---- Toolbar (tactile buttons) ---- */
+  .toolbar{display:flex;align-items:center;gap:10px;}
+  .seg{display:flex;background:var(--surface);padding:6px;border-radius:20px;box-shadow:var(--shadow-soft);gap:4px;}
+  .btn{
+    font-family:"Fredoka";font-weight:600;border:0;cursor:pointer;color:var(--ink);
+    background:var(--surface);border-radius:16px;padding:11px 20px;font-size:16px;
+    transition:transform .08s ease, box-shadow .08s ease, background .15s ease;
+    box-shadow:0 4px 0 rgba(120,98,180,.16);
+  }
+  .btn:active{transform:translateY(4px);box-shadow:0 0 0 rgba(0,0,0,0);}
+  .seg .btn{box-shadow:none;background:transparent;color:var(--ink-soft);padding:10px 18px;}
+  .seg .btn.active{
+    color:#fff;background:var(--grad-hero);
+    box-shadow:0 6px 14px rgba(150,110,220,.35);
+  }
+  .spacer{flex:1;}
+  .icon-btn{
+    width:52px;height:52px;border-radius:18px;border:0;cursor:pointer;background:var(--surface);
+    box-shadow:0 5px 0 rgba(120,98,180,.18);font-size:23px;display:grid;place-items:center;
+    transition:transform .08s ease, box-shadow .08s ease;
+  }
+  .icon-btn:active{transform:translateY(5px);box-shadow:0 0 0;}
+  .nav-arrow{width:46px;height:46px;font-size:24px;}
+
+  /* ===================== MAIN ===================== */
+  .main{flex:1;display:flex;gap:16px;min-height:0;}
+  .card{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow-soft);}
+
+  /* ---- Calendar ---- */
+  .cal{flex:1;display:flex;flex-direction:column;padding:18px 18px 14px;min-width:0;}
+  .cal-head{display:flex;align-items:center;gap:12px;margin-bottom:12px;}
+  .cal-title{font-family:"Fredoka";font-weight:600;font-size:clamp(22px,2.8vw,30px);flex:1;}
+  .dow{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:8px;}
+  .dow span{text-align:center;font-weight:800;color:var(--ink-soft);font-size:13px;letter-spacing:.06em;text-transform:uppercase;}
+  .grid{flex:1;display:grid;grid-template-columns:repeat(7,1fr);grid-auto-rows:1fr;gap:8px;min-height:0;}
+  .cell{
+    background:#FBFAFF;border-radius:18px;padding:8px 8px 6px;display:flex;flex-direction:column;gap:4px;
+    overflow:hidden;border:2px solid transparent;transition:transform .1s ease;
+  }
+  .cell.dim{opacity:.45;}
+  .cell .num{font-family:"Fredoka";font-weight:600;font-size:16px;color:var(--ink);width:30px;height:30px;display:grid;place-items:center;border-radius:50%;}
+  .cell.today{border-color:var(--lav);background:#fff;}
+  .cell.today .num{background:var(--grad-hero);color:#fff;box-shadow:0 4px 10px rgba(150,110,220,.4);}
+  .cell:active{transform:scale(.97);}
+  .ev{
+    font-size:12.5px;font-weight:700;color:#fff;border-radius:9px;padding:3px 8px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.25;
+  }
+  .ev .t{opacity:.85;font-weight:800;margin-right:4px;}
+  .more{font-size:11px;font-weight:800;color:var(--ink-soft);padding-left:4px;}
+
+  /* ---- Right rail ---- */
+  .rail{width:clamp(280px,26vw,360px);display:flex;flex-direction:column;gap:16px;min-height:0;}
+  .panel{padding:16px 16px 14px;display:flex;flex-direction:column;min-height:0;}
+  .panel h3{font-family:"Fredoka";font-weight:600;font-size:19px;margin:0 0 10px;display:flex;align-items:center;gap:8px;}
+  .agenda{flex:1;overflow:hidden;}
+  .agenda-scroll{overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:9px;padding-right:4px;scrollbar-width:none;}
+  .agenda-scroll::-webkit-scrollbar{display:none;}
+  .arow{display:flex;gap:11px;align-items:center;background:#FBFAFF;border-radius:16px;padding:10px 12px;}
+  .dot{width:12px;height:12px;border-radius:50%;flex:none;}
+  .arow .when{font-weight:800;font-size:12px;color:var(--ink-soft);width:62px;flex:none;}
+  .arow .what{font-weight:700;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .empty{color:var(--ink-soft);font-weight:700;text-align:center;padding:18px 6px;font-size:14px;}
+
+  /* family legend */
+  .fam{display:flex;flex-wrap:wrap;gap:8px;}
+  .pill{display:flex;align-items:center;gap:7px;background:#FBFAFF;border-radius:14px;padding:7px 12px;font-weight:800;font-size:13.5px;}
+
+  /* chores */
+  .chore{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:16px;background:#FBFAFF;margin-bottom:9px;transition:background .2s;}
+  .chore.done{background:var(--mint-soft);}
+  .check{
+    width:30px;height:30px;border-radius:50%;border:3px solid var(--line);flex:none;cursor:pointer;
+    display:grid;place-items:center;font-size:16px;color:transparent;transition:.15s;background:#fff;
+  }
+  .chore.done .check{background:var(--mint);border-color:var(--mint);color:#fff;}
+  .chore .label{font-weight:700;font-size:15px;flex:1;}
+  .chore.done .label{text-decoration:line-through;color:var(--ink-soft);}
+  .chore .who{font-weight:800;font-size:12px;padding:3px 9px;border-radius:10px;color:#fff;}
+  .stars{margin-left:auto;font-weight:800;color:var(--butter);font-size:15px;}
+
+  /* ===================== FAB ===================== */
+  .fab{
+    position:fixed;right:30px;bottom:28px;width:70px;height:70px;border-radius:50%;border:0;cursor:pointer;
+    background:var(--grad-hero);color:#fff;font-size:38px;font-weight:300;line-height:1;
+    box-shadow:0 12px 28px rgba(150,110,220,.45);display:grid;place-items:center;
+    transition:transform .1s ease, box-shadow .1s ease;z-index:40;
+  }
+  .fab:active{transform:translateY(5px) scale(.96);box-shadow:0 6px 14px rgba(150,110,220,.45);}
+
+  /* ===================== SLEEP MODE ===================== */
+  #sleep{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;overflow:hidden;}
+  #sleep.on{display:flex;animation:fade .6s ease;}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .slide{position:absolute;inset:0;opacity:0;transition:opacity 1.6s ease;}
+  .slide.show{opacity:1;}
+  .sleep-overlay{position:relative;z-index:2;text-align:center;color:#fff;text-shadow:0 4px 30px rgba(0,0,0,.35);}
+  .sleep-clock{font-family:"Fredoka";font-weight:500;font-size:clamp(80px,16vw,180px);line-height:.95;letter-spacing:-.02em;}
+  .sleep-date{font-family:"Fredoka";font-weight:500;font-size:clamp(20px,3.4vw,34px);opacity:.95;margin-top:6px;}
+  .sleep-hint{position:absolute;bottom:34px;left:0;right:0;text-align:center;color:#fff;opacity:.7;font-weight:700;z-index:2;}
+
+  /* ===================== MODAL ===================== */
+  #modal,#settings{position:fixed;inset:0;background:rgba(58,51,87,.35);backdrop-filter:blur(4px);z-index:120;display:none;align-items:center;justify-content:center;padding:20px;}
+  #modal.on,#settings.on{display:flex;animation:fade .25s ease;}
+  .sheet.tall{max-height:88vh;overflow-y:auto;}
+  .themes{display:flex;gap:10px;flex-wrap:wrap;}
+  .theme-chip{width:58px;height:42px;border-radius:14px;cursor:pointer;border:4px solid transparent;box-shadow:var(--shadow-soft);transition:.12s;}
+  .theme-chip.sel{border-color:var(--ink);transform:scale(1.06);}
+  .fam-edit{display:flex;align-items:center;gap:10px;margin-bottom:9px;}
+  .fam-edit input[type=color]{width:46px;height:46px;border:none;border-radius:13px;background:none;cursor:pointer;padding:0;flex:none;}
+  .fam-edit input[type=text]{flex:1;min-width:0;border:2px solid var(--line);border-radius:14px;padding:11px 13px;font-family:"Nunito";font-weight:700;font-size:15px;color:var(--ink);background:#FBFAFF;}
+  .fam-edit input[type=text]:focus{outline:none;border-color:var(--lav);}
+  .fam-edit .del{width:42px;height:42px;border:0;border-radius:13px;background:var(--rose-soft);color:var(--rose);font-size:17px;font-weight:800;cursor:pointer;flex:none;}
+  .sheet{background:var(--surface);border-radius:30px;box-shadow:0 30px 70px rgba(80,60,130,.4);width:min(440px,100%);padding:24px;animation:pop .3s cubic-bezier(.2,1.2,.4,1);}
+  @keyframes pop{from{transform:scale(.92) translateY(20px);opacity:0}to{transform:none;opacity:1}}
+  .sheet h2{font-family:"Fredoka";font-weight:600;margin:0 0 16px;font-size:24px;}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-weight:800;font-size:13px;color:var(--ink-soft);margin-bottom:6px;}
+  .field input{width:100%;border:2px solid var(--line);border-radius:14px;padding:12px 14px;font-family:"Nunito";font-weight:700;font-size:16px;color:var(--ink);background:#FBFAFF;}
+  .field input:focus{outline:none;border-color:var(--lav);}
+  .swatches{display:flex;gap:10px;flex-wrap:wrap;}
+  .sw{width:38px;height:38px;border-radius:50%;cursor:pointer;border:4px solid transparent;transition:.12s;}
+  .sw.sel{border-color:var(--ink);transform:scale(1.1);}
+  .sheet-actions{display:flex;gap:10px;margin-top:8px;}
+  .sheet-actions .btn{flex:1;text-align:center;font-size:17px;padding:14px;}
+  .btn.primary{background:var(--grad-hero);color:#fff;box-shadow:0 6px 0 rgba(150,110,220,.3);}
+
+  canvas#confetti{position:fixed;inset:0;pointer-events:none;z-index:200;}
+
+  @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important;}}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="greet">
+      <div class="hello" id="hello">Good morning! 🌸</div>
+      <div class="sub"><span id="todayLine">—</span> · <span id="syncTag" style="opacity:.8">…</span></div>
+    </div>
+    <div class="chip weather">
+      <span class="emoji">☀️</span>
+      <span class="big">72°</span>
+      <span style="color:var(--ink-soft);font-weight:800">Sunny</span>
+    </div>
+    <div class="chip clock">
+      <span class="big" id="clockBig">—</span>
+      <span class="ampm" id="clockAmPm"></span>
+    </div>
+  </div>
+
+  <!-- TOOLBAR -->
+  <div class="toolbar">
+    <div class="seg" id="viewSeg">
+      <button class="btn active" data-view="month">Month</button>
+      <button class="btn" data-view="week">Week</button>
+      <button class="btn" data-view="day">Day</button>
+    </div>
+    <button class="icon-btn nav-arrow" id="prev">‹</button>
+    <button class="icon-btn nav-arrow" id="today">●</button>
+    <button class="icon-btn nav-arrow" id="next">›</button>
+    <div class="spacer"></div>
+    <button class="icon-btn" id="settingsBtn" title="Colors & family">🎨</button>
+    <button class="icon-btn" id="soundBtn" title="Sound">🔔</button>
+    <button class="icon-btn" id="sleepBtn" title="Sleep">🌙</button>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="cal card">
+      <div class="cal-head">
+        <div class="cal-title" id="calTitle">—</div>
+      </div>
+      <div class="dow"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
+      <div class="grid" id="grid"></div>
+    </div>
+
+    <div class="rail">
+      <div class="panel card agenda">
+        <h3>📅 Today</h3>
+        <div class="agenda-scroll" id="agenda"></div>
+      </div>
+      <div class="panel card">
+        <h3>⭐ Chores</h3>
+        <div id="chores"></div>
+      </div>
+      <div class="panel card">
+        <h3>👨‍👩‍👧‍👦 Family</h3>
+        <div class="fam" id="fam"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<button class="fab" id="fab">+</button>
+
+<!-- SLEEP -->
+<div id="sleep">
+  <div class="slide" style="background:linear-gradient(135deg,#FFB3D1,#B39CFF)"></div>
+  <div class="slide" style="background:linear-gradient(135deg,#8FD0FF,#46D6B4)"></div>
+  <div class="slide" style="background:linear-gradient(135deg,#FFC44D,#FF9E7A)"></div>
+  <div class="slide" style="background:linear-gradient(135deg,#A98CFF,#6FB8F6)"></div>
+  <div class="sleep-overlay">
+    <div class="sleep-clock display" id="sleepClock">—</div>
+    <div class="sleep-date display" id="sleepDate">—</div>
+  </div>
+  <div class="sleep-hint">tap anywhere to wake · your photos will go here</div>
+</div>
+
+<!-- ADD MODAL -->
+<div id="modal">
+  <div class="sheet">
+    <h2>Add an event ✨</h2>
+    <div class="field"><label>What's happening?</label><input id="mTitle" placeholder="Soccer practice"></div>
+    <div class="field"><label>When (day this month)</label><input id="mDay" type="number" min="1" max="31" placeholder="15"></div>
+    <div class="field"><label>Time</label><input id="mTime" placeholder="3:30 PM"></div>
+    <div class="field"><label>Who's it for?</label><div class="swatches" id="mSwatches"></div></div>
+    <div class="sheet-actions">
+      <button class="btn" id="mCancel">Cancel</button>
+      <button class="btn primary" id="mSave">Add it</button>
+    </div>
+  </div>
+</div>
+
+<canvas id="confetti"></canvas>
+
+<!-- SETTINGS / COLOR EDITOR -->
+<div id="settings">
+  <div class="sheet tall">
+    <h2>Colors &amp; family 🎨</h2>
+    <div class="field">
+      <label>Theme palette</label>
+      <div class="themes" id="themePicker"></div>
+    </div>
+    <div class="field">
+      <label>Family members &amp; colors</label>
+      <div id="famEditor"></div>
+      <button class="btn" id="addFam" style="margin-top:8px;font-size:14px;padding:9px 16px;">+ Add person</button>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn primary" id="sDone">Done</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   STORAGE  — works as a downloaded file (persists) and degrades
+   gracefully if storage is blocked (e.g. preview sandbox).
+   ============================================================ */
+const store = (()=>{
+  let ok=true; try{localStorage.setItem('_t','1');localStorage.removeItem('_t');}catch(e){ok=false;}
+  const mem={};
+  return {
+    get:(k,d)=>{try{const v=ok?localStorage.getItem(k):mem[k];return v?JSON.parse(v):d;}catch(e){return d;}},
+    set:(k,v)=>{try{const s=JSON.stringify(v);if(ok)localStorage.setItem(k,s);else mem[k]=s;}catch(e){}}
+  };
+})();
+
+/* ============================================================
+   FAMILY  — each person gets a candy color
+   ============================================================ */
+const FAMILY_DEFAULT = [
+  {name:"Mom",   color:"#FF8FBE"},
+  {name:"Dad",   color:"#6FB8F6"},
+  {name:"Kids",  color:"#46D6B4"},
+  {name:"Home",  color:"#A98CFF"},
+  {name:"Fun",   color:"#FFC44D"},
+];
+let FAMILY = store.get('family', FAMILY_DEFAULT);
+function saveFamily(){ store.set('family', FAMILY); }
+
+/* One-tap palettes that restyle the whole app */
+const THEMES = {
+  cottoncandy:{name:"Cotton Candy", hero:"linear-gradient(120deg,#FFB3D1 0%,#B39CFF 50%,#8FD0FF 100%)", bg1:"#F3F1FF", bg2:"#FFF2FA"},
+  mint:       {name:"Mint Dream",   hero:"linear-gradient(120deg,#8FD0FF,#46D6B4)",                      bg1:"#EAFBF5", bg2:"#EFF8FF"},
+  sunset:     {name:"Sunset",       hero:"linear-gradient(120deg,#FFC44D,#FF8FBE)",                      bg1:"#FFF6EC", bg2:"#FFF0F6"},
+  lavender:   {name:"Lavender",     hero:"linear-gradient(120deg,#A98CFF,#6FB8F6)",                      bg1:"#F4F0FF", bg2:"#ECF3FF"},
+  bubblegum:  {name:"Bubblegum",    hero:"linear-gradient(120deg,#FF9E7A,#FF8FBE,#A98CFF)",              bg1:"#FFF1F4", bg2:"#FBF1FF"},
+};
+let themeKey = store.get('theme','cottoncandy');
+function applyTheme(k){
+  const t=THEMES[k]||THEMES.cottoncandy; themeKey=k; store.set('theme',k);
+  const r=document.documentElement.style;
+  r.setProperty('--grad-hero',t.hero); r.setProperty('--bg-1',t.bg1); r.setProperty('--bg-2',t.bg2);
+}
+
+/* ============================================================
+   EVENTS  —  real feeds, served by the box as ./events.json
+   The browser is dumb & pretty: it fetches events.json (built by
+   fetcher.py from each person's Google/iCloud .ics), caches the
+   last-good copy to localStorage, and renders the cache on any
+   failure so a reboot or network blip never blanks the wall.
+
+   In-memory event shape: { date:'YYYY-MM-DD', time, title, color, feedName, local }
+   ============================================================ */
+const today = new Date();
+const Y = today.getFullYear(), M = today.getMonth(), D = today.getDate();
+
+const pad = n => String(n).padStart(2,'0');
+const dateKey = (y,m,d) => `${y}-${pad(m+1)}-${pad(d)}`;   // m is 0-based
+const TODAY_KEY = dateKey(Y,M,D);
+
+let FEEDS = [];                                  // legend: [{name,color}]
+let events = [];                                 // imported + local, render-shaped
+let localEvents = store.get('localEvents', []);  // box-local manual adds
+let lastSync = null;                             // Date of last good events.json
+function saveLocal(){ store.set('localEvents', localEvents); }
+
+function fmtTime(iso){
+  const d=new Date(iso); let h=d.getHours(); const ap=h<12?'AM':'PM';
+  const h12=h%12||12; return `${h12}:${pad(d.getMinutes())} ${ap}`;
+}
+function shapeImported(doc){
+  const colorOf={}; (doc.feeds||[]).forEach(f=>colorOf[f.id]=f);
+  return (doc.events||[]).map(e=>{
+    const d=new Date(e.start); const f=colorOf[e.feed_id]||{};
+    return {
+      date: dateKey(d.getFullYear(),d.getMonth(),d.getDate()),
+      time: e.all_day ? 'All day' : fmtTime(e.start),
+      title: e.title, color: f.color||'#A98CFF', feedName: f.name||'Calendar', local:false
+    };
+  });
+}
+
+/* Rebuild the in-memory list from a parsed events.json doc + local adds. */
+function applyDoc(doc){
+  FEEDS = (doc.feeds||[]).map(f=>({name:f.name,color:f.color}));
+  FAMILY = FEEDS.length ? FEEDS : FAMILY_DEFAULT;   // legend & swatches follow feeds
+  events = shapeImported(doc).concat(localEvents);
+  if(doc.generated_at) lastSync = new Date(doc.generated_at);
+}
+
+/* Fetch events.json; fall back to cached copy, then to empty. */
+async function loadEvents(){
+  try{
+    const res = await fetch('./events.json?_='+Date.now(), {cache:'no-store'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const doc = await res.json();
+    store.set('events_cache', doc);              // remember last good
+    applyDoc(doc);
+  }catch(err){
+    applyDoc(store.get('events_cache', null) || {feeds:[],events:[]});
+  }
+  liveRefresh(); updateSync();
+}
+
+function updateSync(){
+  const el=$("#syncTag"); if(!el) return;
+  if(!lastSync){ el.textContent='offline'; return; }
+  const mins=Math.round((Date.now()-lastSync.getTime())/60000);
+  el.textContent = mins<1 ? 'synced just now'
+                 : mins<60 ? `synced ${mins} min ago`
+                 : `synced ${Math.round(mins/60)} h ago`;
+}
+
+/* ============================================================
+   CHORES
+   ============================================================ */
+let chores = store.get('chores', [
+  {label:"Feed the pig 🐷", who:3, done:false},
+  {label:"Tidy play room",  who:2, done:false},
+  {label:"Take out trash",  who:1, done:false},
+  {label:"Water plants 🌱", who:2, done:false},
+]);
+function saveChores(){ store.set('chores', chores); }
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+let viewMonth = M, viewYear = Y;
+const $ = s=>document.querySelector(s);
+
+function monthName(m){return ["January","February","March","April","May","June","July","August","September","October","November","December"][m];}
+function famColor(i){return FAMILY[i]?FAMILY[i].color:"#A98CFF";}
+/* sort key: all-day floats to top, then by clock time */
+function minsOf(t){
+  if(!t||t==="All day") return -1;
+  const m=t.match(/(\d+):(\d+)\s*(AM|PM)?/i); if(!m) return 0;
+  let h=+m[1]; const mi=+m[2], ap=(m[3]||'').toUpperCase();
+  if(ap==='PM'&&h<12)h+=12; if(ap==='AM'&&h===12)h=0;
+  return h*60+mi;
+}
+
+function renderCalendar(){
+  $("#calTitle").textContent = `${monthName(viewMonth)} ${viewYear}`;
+  const grid=$("#grid"); grid.innerHTML="";
+  const first=new Date(viewYear,viewMonth,1).getDay();
+  const days=new Date(viewYear,viewMonth+1,0).getDate();
+  const prevDays=new Date(viewYear,viewMonth,0).getDate();
+  const cells=[];
+  for(let i=first-1;i>=0;i--) cells.push({n:prevDays-i,dim:true});
+  for(let d=1;d<=days;d++) cells.push({n:d,dim:false});
+  while(cells.length%7!==0||cells.length<42) cells.push({n:cells.length-(first+days)+1,dim:true});
+
+  cells.forEach(c=>{
+    const cell=document.createElement("div");
+    cell.className="cell"+(c.dim?" dim":"");
+    const isToday=!c.dim && c.n===D && viewMonth===M && viewYear===Y;
+    if(isToday) cell.classList.add("today");
+    cell.innerHTML=`<div class="num">${c.n}</div>`;
+    if(!c.dim){
+      const key=dateKey(viewYear,viewMonth,c.n);
+      const list=events.filter(e=>e.date===key).sort((a,b)=>minsOf(a.time)-minsOf(b.time));
+      list.slice(0,3).forEach(e=>{
+        const ev=document.createElement("div");
+        ev.className="ev"; ev.style.background=e.color||famColor(e.fam);
+        ev.innerHTML=`<span class="t">${e.time==="All day"?"":e.time.replace(/:00/,'').replace(' ','')}</span>${e.title}`;
+        cell.appendChild(ev);
+      });
+      if(list.length>3){const m=document.createElement("div");m.className="more";m.textContent=`+${list.length-3} more`;cell.appendChild(m);}
+      cell.addEventListener("click",()=>{ pop(); openAdd(c.n); });
+    }
+    grid.appendChild(cell);
+  });
+}
+
+function renderAgenda(){
+  const a=$("#agenda"); a.innerHTML="";
+  const list=events.filter(e=>e.date===TODAY_KEY).sort((x,y)=>minsOf(x.time)-minsOf(y.time));
+  if(!list.length){a.innerHTML=`<div class="empty">Nothing today — enjoy the calm 🌿</div>`;return;}
+  list.forEach(e=>{
+    const r=document.createElement("div");r.className="arow";
+    r.innerHTML=`<span class="dot" style="background:${e.color||famColor(e.fam)}"></span>
+      <span class="when">${e.time}</span><span class="what">${e.title}</span>`;
+    a.appendChild(r);
+  });
+}
+
+function renderChores(){
+  const c=$("#chores"); c.innerHTML="";
+  chores.forEach((ch,i)=>{
+    const row=document.createElement("div");row.className="chore"+(ch.done?" done":"");
+    const who = FAMILY[ch.who] || FAMILY[0] || {name:"—",color:"#A98CFF"};
+    row.innerHTML=`<div class="check">✓</div>
+      <div class="label">${ch.label}</div>
+      <span class="who" style="background:${who.color}">${who.name}</span>`;
+    row.querySelector(".check").addEventListener("click",e=>{
+      e.stopPropagation();
+      ch.done=!ch.done; saveChores(); renderChores();
+      if(ch.done){ pop(true); confettiBurst(); }
+    });
+    c.appendChild(row);
+  });
+  const earned=chores.filter(c=>c.done).length;
+  const star=document.createElement("div");
+  star.style.cssText="text-align:center;font-weight:800;color:var(--butter);margin-top:4px;font-size:15px;";
+  star.innerHTML=`⭐ ${earned} / ${chores.length} done today`;
+  c.appendChild(star);
+}
+
+function renderFamily(){
+  const f=$("#fam"); f.innerHTML="";
+  FAMILY.forEach(p=>{
+    const el=document.createElement("div");el.className="pill";
+    el.innerHTML=`<span class="dot" style="background:${p.color}"></span>${p.name}`;
+    f.appendChild(el);
+  });
+}
+
+/* ============================================================
+   CLOCK + GREETING
+   ============================================================ */
+function tick(){
+  const n=new Date();
+  let h=n.getHours(); const ap=h<12?"AM":"PM"; const h12=h%12||12;
+  const mm=String(n.getMinutes()).padStart(2,"0");
+  $("#clockBig").textContent=`${h12}:${mm}`; $("#clockAmPm").textContent=ap;
+  $("#sleepClock").textContent=`${h12}:${mm}`;
+  const dows=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const line=`${dows[n.getDay()]}, ${monthName(n.getMonth())} ${n.getDate()}`;
+  $("#todayLine").textContent=line; $("#sleepDate").textContent=line;
+  $("#hello").textContent = h<12?"Good morning! 🌸" : h<17?"Good afternoon! ☀️" : "Good evening! 🌙";
+}
+
+/* ============================================================
+   SOUND  — soft pop for that tactile feel
+   ============================================================ */
+let soundOn = store.get('sound', true);
+let actx;
+function pop(happy){
+  if(!soundOn)return;
+  try{
+    actx=actx||new (window.AudioContext||window.webkitAudioContext)();
+    const o=actx.createOscillator(),g=actx.createGain();
+    o.type="sine"; o.frequency.value=happy?660:440;
+    o.connect(g);g.connect(actx.destination);
+    g.gain.setValueAtTime(.0001,actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(.12,actx.currentTime+.01);
+    g.gain.exponentialRampToValueAtTime(.0001,actx.currentTime+.18);
+    if(happy)o.frequency.exponentialRampToValueAtTime(990,actx.currentTime+.15);
+    o.start();o.stop(actx.currentTime+.2);
+  }catch(e){}
+}
+function updateSoundBtn(){ $("#soundBtn").textContent = soundOn?"🔔":"🔕"; }
+
+/* ============================================================
+   CONFETTI
+   ============================================================ */
+const cv=$("#confetti"),cx=cv.getContext("2d");
+function sizeCv(){cv.width=innerWidth;cv.height=innerHeight;}
+sizeCv();addEventListener("resize",sizeCv);
+let parts=[];
+const COLORS=["#FF8FBE","#6FB8F6","#46D6B4","#FFC44D","#A98CFF","#FF9E7A"];
+function confettiBurst(){
+  for(let i=0;i<90;i++)parts.push({
+    x:innerWidth-60,y:innerHeight-200,
+    vx:(Math.random()-.5)*14,vy:-Math.random()*14-4,
+    g:.4+Math.random()*.2,s:6+Math.random()*7,
+    c:COLORS[i%COLORS.length],r:Math.random()*6,vr:(Math.random()-.5)*.4,life:1
+  });
+}
+function loop(){
+  cx.clearRect(0,0,cv.width,cv.height);
+  parts=parts.filter(p=>p.life>0);
+  parts.forEach(p=>{
+    p.vy+=p.g;p.x+=p.vx;p.y+=p.vy;p.r+=p.vr;p.life-=.008;
+    cx.save();cx.translate(p.x,p.y);cx.rotate(p.r);cx.globalAlpha=Math.max(p.life,0);
+    cx.fillStyle=p.c;cx.fillRect(-p.s/2,-p.s/2,p.s,p.s*.6);cx.restore();
+  });
+  requestAnimationFrame(loop);
+}
+loop();
+
+/* ============================================================
+   SLEEP MODE  — idle slideshow with big clock
+   ============================================================ */
+const slides=document.querySelectorAll(".slide");
+let slideIdx=0,slideTimer,idleTimer;
+function showSlide(){slides.forEach((s,i)=>s.classList.toggle("show",i===slideIdx));slideIdx=(slideIdx+1)%slides.length;}
+function sleep(){
+  $("#sleep").classList.add("on");slideIdx=0;showSlide();
+  slideTimer=setInterval(showSlide,6000);
+}
+function wake(){$("#sleep").classList.remove("on");clearInterval(slideTimer);resetIdle();}
+function resetIdle(){clearTimeout(idleTimer);idleTimer=setTimeout(sleep,120000);} /* 2 min */
+["click","touchstart","mousemove","keydown"].forEach(ev=>document.addEventListener(ev,()=>{
+  if($("#sleep").classList.contains("on"))return; resetIdle();
+},{passive:true}));
+$("#sleep").addEventListener("click",wake);
+
+/* ============================================================
+   ADD-EVENT MODAL
+   ============================================================ */
+let pickFam=2;
+function buildSwatches(){
+  const w=$("#mSwatches");w.innerHTML="";
+  FAMILY.forEach((p,i)=>{
+    const s=document.createElement("div");s.className="sw"+(i===pickFam?" sel":"");
+    s.style.background=p.color;s.title=p.name;
+    s.addEventListener("click",()=>{pickFam=i;buildSwatches();});
+    w.appendChild(s);
+  });
+}
+function openAdd(day){
+  $("#modal").classList.add("on");
+  $("#mTitle").value="";$("#mDay").value=day||"";$("#mTime").value="";
+  buildSwatches();setTimeout(()=>$("#mTitle").focus(),100);
+}
+function closeAdd(){$("#modal").classList.remove("on");}
+$("#fab").addEventListener("click",()=>{pop();openAdd(D);});
+$("#mCancel").addEventListener("click",()=>{pop();closeAdd();});
+$("#mSave").addEventListener("click",()=>{
+  const t=$("#mTitle").value.trim();if(!t)return;
+  const maxDay=new Date(viewYear,viewMonth+1,0).getDate();
+  const day=Math.min(Math.max(+$("#mDay").value||D,1),maxDay);
+  const who=FAMILY[pickFam]||FAMILY[0]||{name:"Home",color:"#A98CFF"};
+  const ev={date:dateKey(viewYear,viewMonth,day),time:$("#mTime").value.trim()||"All day",
+            title:t,color:who.color,feedName:who.name,local:true};
+  localEvents.push(ev); saveLocal(); events.push(ev);
+  renderCalendar();renderAgenda();pop(true);confettiBurst();closeAdd();
+});
+
+/* ============================================================
+   DRAG-TO-SCROLL  — single-touch friendly (fixes the scroll issue)
+   ============================================================ */
+function dragScroll(el){
+  let down=false,sy=0,st=0;
+  const start=y=>{down=true;sy=y;st=el.scrollTop;};
+  const move=y=>{if(down)el.scrollTop=st-(y-sy);};
+  const end=()=>down=false;
+  el.addEventListener("touchstart",e=>start(e.touches[0].clientY),{passive:true});
+  el.addEventListener("touchmove",e=>move(e.touches[0].clientY),{passive:true});
+  el.addEventListener("touchend",end);
+  el.addEventListener("mousedown",e=>start(e.clientY));
+  el.addEventListener("mousemove",e=>move(e.clientY));
+  el.addEventListener("mouseup",end);el.addEventListener("mouseleave",end);
+}
+dragScroll($("#agenda"));
+
+/* ============================================================
+   TOOLBAR WIRING
+   ============================================================ */
+$("#viewSeg").addEventListener("click",e=>{
+  const b=e.target.closest(".btn");if(!b)return;pop();
+  [...$("#viewSeg").children].forEach(x=>x.classList.remove("active"));
+  b.classList.add("active");
+  /* Week/Day views are placeholders for now — Month is the star of v1 */
+});
+$("#prev").addEventListener("click",()=>{pop();viewMonth--;if(viewMonth<0){viewMonth=11;viewYear--;}renderCalendar();});
+$("#next").addEventListener("click",()=>{pop();viewMonth++;if(viewMonth>11){viewMonth=0;viewYear++;}renderCalendar();});
+$("#today").addEventListener("click",()=>{pop();viewMonth=M;viewYear=Y;renderCalendar();});
+$("#sleepBtn").addEventListener("click",()=>{pop();sleep();});
+$("#soundBtn").addEventListener("click",()=>{soundOn=!soundOn;store.set('sound',soundOn);updateSoundBtn();if(soundOn)pop(true);});
+
+/* ============================================================
+   SETTINGS  — live color + family editing
+   ============================================================ */
+function liveRefresh(){
+  if(pickFam>=FAMILY.length)pickFam=0;
+  renderCalendar();renderAgenda();renderChores();renderFamily();
+  if($("#modal").classList.contains("on"))buildSwatches();
+}
+function renderThemePicker(){
+  const p=$("#themePicker");p.innerHTML="";
+  Object.entries(THEMES).forEach(([k,t])=>{
+    const c=document.createElement("div");
+    c.className="theme-chip"+(k===themeKey?" sel":"");
+    c.style.background=t.hero;c.title=t.name;
+    c.addEventListener("click",()=>{applyTheme(k);renderThemePicker();liveRefresh();pop();});
+    p.appendChild(c);
+  });
+}
+function renderFamEditor(){
+  const e=$("#famEditor");e.innerHTML="";
+  FAMILY.forEach((p,i)=>{
+    const row=document.createElement("div");row.className="fam-edit";
+    row.innerHTML=`<input type="color" value="${p.color}">
+      <input type="text" value="${p.name}" maxlength="14">
+      <button class="del" title="Remove">✕</button>`;
+    const col=row.querySelector('input[type=color]');
+    const name=row.querySelector('input[type=text]');
+    const del=row.querySelector('.del');
+    col.addEventListener("input",()=>{FAMILY[i].color=col.value;saveFamily();liveRefresh();});
+    name.addEventListener("input",()=>{FAMILY[i].name=name.value;saveFamily();liveRefresh();});
+    del.addEventListener("click",()=>{
+      if(FAMILY.length<=1)return;
+      FAMILY.splice(i,1);saveFamily();renderFamEditor();liveRefresh();pop();
+    });
+    e.appendChild(row);
+  });
+}
+$("#addFam").addEventListener("click",()=>{
+  FAMILY.push({name:"New",color:COLORS[FAMILY.length%COLORS.length]});
+  saveFamily();renderFamEditor();liveRefresh();pop();
+});
+$("#settingsBtn").addEventListener("click",()=>{pop();$("#settings").classList.add("on");renderThemePicker();renderFamEditor();});
+$("#sDone").addEventListener("click",()=>{pop();$("#settings").classList.remove("on");});
+$("#settings").addEventListener("click",e=>{if(e.target.id==="settings"){pop();$("#settings").classList.remove("on");}});
+
+/* ============================================================
+   GO
+   ============================================================ */
+applyTheme(themeKey);
+tick();setInterval(tick,1000);
+renderCalendar();renderAgenda();renderChores();renderFamily();
+updateSoundBtn();resetIdle();
+
+/* load real feeds, then poll for fresh data + refresh the "synced" tag */
+loadEvents();
+setInterval(loadEvents, 3*60*1000);   // re-fetch events.json every 3 min
+setInterval(updateSync, 30*1000);     // keep the "N min ago" label honest
+</script>
+</body>
+</html>

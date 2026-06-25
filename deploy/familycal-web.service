@@ -1,0 +1,16 @@
+[Unit]
+Description=Family Calendar web app (Flask)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__APPDIR__
+ExecStart=__APPDIR__/.venv/bin/python __APPDIR__/server.py
+Restart=always
+RestartSec=3
+Environment=FAMILYCAL_TZ=America/Los_Angeles
+
+[Install]
+WantedBy=multi-user.target

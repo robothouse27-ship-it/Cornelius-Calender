@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh Family Calendar feeds every 10 minutes
+
+[Timer]
+# 1 min after boot, then every 10 min
+OnBootSec=1min
+OnUnitActiveSec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

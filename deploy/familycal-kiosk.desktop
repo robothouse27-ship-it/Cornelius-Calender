@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Family Calendar Kiosk
+Comment=Open the family calendar fullscreen on login
+Exec=__APPDIR__/deploy/kiosk.sh
+X-GNOME-Autostart-enabled=true
+Terminal=false

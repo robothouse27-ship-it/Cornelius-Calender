@@ -1,0 +1,12 @@
+{
+  "feeds": [
+    {
+      "id": "f_sample",
+      "name": "Holidays",
+      "color": "#6FB8F6",
+      "type": "ics",
+      "url": "https://calendar.google.com/calendar/ical/en.usa%23holiday%40group.v.calendar.google.com/public/basic.ics",
+      "enabled": true
+    }
+  ]
+}

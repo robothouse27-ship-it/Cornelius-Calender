@@ -1,0 +1,6 @@
+flask>=3.0
+requests>=2.31
+icalendar>=5.0
+recurring-ical-events>=2.2
+tzdata>=2024.1
+qrcode[pil]>=7.4
