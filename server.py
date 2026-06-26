@@ -31,9 +31,11 @@ HERE = Path(__file__).resolve().parent
 DATA = HERE / "data"
 EVENTS_PATH = DATA / "events.json"
 FEEDS_PATH = DATA / "feeds.json"
+PHOTOS_DIR = HERE / "photos"        # drop family photos here for sleep mode
 INDEX = HERE / "family-calendar.html"
 PORT = 8080
 WINDOW_SECS = 120  # how long an add-window stays open
+PHOTO_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 
 # candy palette offered on the phone form
 PALETTE = ["#FF8FBE", "#6FB8F6", "#46D6B4", "#FFC44D", "#A98CFF", "#FF9E7A"]
@@ -334,6 +336,24 @@ def geolocate():
     except (requests.RequestException, KeyError, ValueError):
         pass
     return _geo
+
+
+@app.route("/api/photos")
+def photos():
+    """List family photos for sleep-mode slideshow (empty list = use gradients)."""
+    if not PHOTOS_DIR.is_dir():
+        return jsonify({"photos": []})
+    names = sorted(p.name for p in PHOTOS_DIR.iterdir()
+                   if p.suffix.lower() in PHOTO_EXTS)
+    return jsonify({"photos": ["/photos/" + n for n in names]})
+
+
+@app.route("/photos/<path:fn>")
+def photo_file(fn):
+    p = (PHOTOS_DIR / fn).resolve()
+    if PHOTOS_DIR not in p.parents or not p.is_file():  # no path traversal
+        abort(404)
+    return send_file(p)
 
 
 @app.route("/api/weather")

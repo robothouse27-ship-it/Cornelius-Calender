@@ -286,7 +286,7 @@
     <div class="sleep-clock display" id="sleepClock">—</div>
     <div class="sleep-date display" id="sleepDate">—</div>
   </div>
-  <div class="sleep-hint">tap anywhere to wake · your photos will go here</div>
+  <div class="sleep-hint" id="sleepHint">tap anywhere to wake · drop photos in the photos/ folder</div>
 </div>
 
 <!-- ADD MODAL -->
@@ -673,9 +673,27 @@ loop();
 /* ============================================================
    SLEEP MODE  — idle slideshow with big clock
    ============================================================ */
-const slides=document.querySelectorAll(".slide");
 let slideIdx=0,slideTimer,idleTimer;
-function showSlide(){slides.forEach((s,i)=>s.classList.toggle("show",i===slideIdx));slideIdx=(slideIdx+1)%slides.length;}
+const slidesNow=()=>document.querySelectorAll("#sleep .slide");
+function showSlide(){const s=slidesNow();if(!s.length)return;s.forEach((el,i)=>el.classList.toggle("show",i===slideIdx));slideIdx=(slideIdx+1)%s.length;}
+
+/* Swap the gradient slides for family photos when the box has any (§ sleep). */
+async function loadPhotos(){
+  try{
+    const r=await fetch('/api/photos?_='+Date.now(),{cache:'no-store'});
+    const {photos}=await r.json();
+    if(!photos||!photos.length) return;            // keep the pretty gradients
+    document.querySelectorAll("#sleep .slide").forEach(s=>s.remove());
+    const sleepEl=$("#sleep"); const anchor=sleepEl.querySelector(".sleep-overlay");
+    photos.forEach(src=>{
+      const d=document.createElement("div");d.className="slide";
+      d.style.cssText=`background:#000 center/cover no-repeat url("${src}")`;
+      sleepEl.insertBefore(d,anchor);
+    });
+    $("#sleepHint").textContent="tap anywhere to wake";
+  }catch(e){/* keep gradients */}
+}
+
 function sleep(){
   $("#sleep").classList.add("on");slideIdx=0;showSlide();
   slideTimer=setInterval(showSlide,6000);
@@ -935,6 +953,9 @@ setInterval(loadWeather, 15*60*1000); // refresh weather every 15 min
 
 checkReminders();
 setInterval(()=>{ checkReminders(); renderAgenda(); }, 30*1000); // nudge + live countdown
+
+loadPhotos();
+setInterval(loadPhotos, 10*60*1000);  // pick up newly-added photos
 </script>
 </body>
 </html>
