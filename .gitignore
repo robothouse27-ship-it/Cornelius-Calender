@@ -13,3 +13,4 @@ photos/*
 
 # stray images dropped in the project root (keep them local, out of git)
 /*.png
+data/feeds.local.json
