@@ -230,6 +230,8 @@
   .fam-edit input[type=text]{flex:1;min-width:0;border:2px solid var(--line);border-radius:14px;padding:11px 13px;font-family:"Nunito";font-weight:700;font-size:15px;color:var(--ink);background:#FBFAFF;}
   .fam-edit input[type=text]:focus{outline:none;border-color:var(--lav);}
   .fam-edit .del{width:42px;height:42px;border:0;border-radius:13px;background:var(--rose-soft);color:var(--rose);font-size:17px;font-weight:800;cursor:pointer;flex:none;}
+  .fam-edit select{flex:none;width:104px;border:2px solid var(--line);border-radius:13px;padding:10px 8px;font-family:"Nunito";font-weight:700;font-size:14px;color:var(--ink);background:#FBFAFF;cursor:pointer;}
+  .fam-edit input.ava{flex:none;width:50px;text-align:center;font-size:20px;}
   .sheet{background:var(--surface);border-radius:30px;box-shadow:0 30px 70px rgba(80,60,130,.4);width:min(440px,100%);padding:24px;animation:pop .3s cubic-bezier(.2,1.2,.4,1);}
   @keyframes pop{from{transform:scale(.92) translateY(20px);opacity:0}to{transform:none;opacity:1}}
   .sheet h2{font-family:"Fredoka";font-weight:600;margin:0 0 16px;font-size:24px;}
@@ -372,6 +374,11 @@
     <div class="field">
       <label>Theme palette</label>
       <div class="themes" id="themePicker"></div>
+    </div>
+    <div class="field">
+      <label>People</label>
+      <div id="peopleEditor"></div>
+      <button class="btn" id="addPerson" style="margin-top:8px;font-size:15px;padding:12px 18px;">🙂 Add a person</button>
     </div>
     <div class="field">
       <label>Calendars &amp; colors</label>
@@ -1072,14 +1079,21 @@ function renderFeedEditor(){
   FEED_LIST.forEach((f,i)=>{
     const row=document.createElement("div");row.className="fam-edit";
     row.style.opacity = f.enabled===false ? .5 : 1;
+    const ownerOpts=`<option value="">— owner —</option>`+PEOPLE.map(p=>
+      `<option value="${p.id}"${f.owner_id===p.id?' selected':''}>${p.avatar||''} ${p.name}</option>`).join('');
     row.innerHTML=`<input type="color" value="${f.color}">
       <input type="text" value="${f.name}" maxlength="20">
+      <select class="owner" title="Owner">${ownerOpts}</select>
       <button class="eye" title="Show/hide" style="width:42px;height:46px;border:0;border-radius:13px;background:var(--lav-soft);cursor:pointer;flex:none;display:grid;place-items:center;"><img class="ctrlIcon" src="/icons/${f.enabled===false?'ui_hide':'ui_show'}.png" alt=""></button>
       <button class="del" title="Remove"><img class="ctrlIcon" src="/icons/ui_delete.png" alt="Remove"></button>`;
     const col=row.querySelector('input[type=color]');
     const name=row.querySelector('input[type=text]');
+    const owner=row.querySelector('select.owner');
     const eye=row.querySelector('.eye');
     const del=row.querySelector('.del');
+    owner.addEventListener("change",()=>{
+      f.owner_id=owner.value||null; patchFeed(f.id,{owner_id:f.owner_id});
+    });
     col.addEventListener("input",()=>{                 // live recolor on the wall
       f.color=col.value; FAMILY=familyFromFeeds();
       recolorEvents(f.name,col.value); renderCalendar();renderAgenda();renderFamily();
@@ -1106,7 +1120,58 @@ function renderFeedEditor(){
     wrap.appendChild(row);
   });
 }
-$("#settingsBtn").addEventListener("click",()=>{pop();$("#settings").classList.add("on");renderThemePicker();loadFeeds().then(renderFeedEditor);});
+
+/* persist a person change to the box, then re-pull so owner colors/names/
+   avatars flow to events.json + the wall (CATEGORIES, legend). */
+function patchPerson(id, body){
+  fetch('/api/people/update',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({id,...body})}).catch(()=>{});
+  setTimeout(()=>{ loadFeeds().then(()=>{renderPeopleEditor();renderFeedEditor();}); loadEvents(); }, 1800);
+}
+function renderPeopleEditor(){
+  const wrap=$("#peopleEditor");wrap.innerHTML="";
+  if(!PEOPLE.length){
+    wrap.innerHTML=`<div class="empty" style="padding:8px 4px">No people yet — add family members, then tag each calendar with an owner.</div>`;
+    return;
+  }
+  PEOPLE.forEach((p,i)=>{
+    const row=document.createElement("div");row.className="fam-edit";
+    row.innerHTML=`<input type="color" value="${p.color||'#A98CFF'}">
+      <input class="ava" type="text" value="${p.avatar||'🙂'}" maxlength="4" title="Emoji">
+      <input type="text" value="${p.name}" maxlength="20">
+      <button class="del" title="Remove"><img class="ctrlIcon" src="/icons/ui_delete.png" alt="Remove"></button>`;
+    const col=row.querySelector('input[type=color]');
+    const ava=row.querySelector('input.ava');
+    const name=row.querySelector('input[type=text]:not(.ava)');
+    const del=row.querySelector('.del');
+    col.addEventListener("change",()=>{ p.color=col.value; FAMILY=familyFromFeeds(); renderFamily(); patchPerson(p.id,{color:p.color}); });
+    ava.addEventListener("change",()=>{ p.avatar=ava.value.trim()||p.avatar; FAMILY=familyFromFeeds(); renderFamily(); patchPerson(p.id,{avatar:p.avatar}); });
+    name.addEventListener("change",()=>{ p.name=name.value.trim()||p.name; FAMILY=familyFromFeeds(); renderFamily(); renderFeedEditor(); patchPerson(p.id,{name:p.name}); });
+    del.addEventListener("click",()=>{
+      pop();
+      if(!confirm(`Remove “${p.name}”? Their calendars stay on the wall but become unassigned.`)) return;
+      PEOPLE.splice(i,1); FAMILY=familyFromFeeds();
+      renderPeopleEditor(); renderFeedEditor(); renderFamily();
+      fetch('/api/people/delete',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({id:p.id})}).catch(()=>{});
+      setTimeout(()=>{ loadFeeds().then(()=>{renderPeopleEditor();renderFeedEditor();}); loadEvents(); }, 1800);
+    });
+    wrap.appendChild(row);
+  });
+}
+async function addPerson(){
+  const name=(prompt("New person's name?")||"").trim();
+  if(!name) return;
+  try{
+    const r=await fetch('/api/people/add',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name})});
+    const j=await r.json();
+    if(j.ok){ PEOPLE.push(j.person); FAMILY=familyFromFeeds();
+      renderPeopleEditor(); renderFeedEditor(); renderFamily(); pop(true); }
+  }catch(e){/* offline — ignore */}
+}
+$("#addPerson").addEventListener("click",()=>{pop();addPerson();});
+$("#settingsBtn").addEventListener("click",()=>{pop();$("#settings").classList.add("on");renderThemePicker();loadFeeds().then(()=>{renderPeopleEditor();renderFeedEditor();});});
 $("#sDone").addEventListener("click",()=>{pop();$("#settings").classList.remove("on");});
 $("#settings").addEventListener("click",e=>{if(e.target.id==="settings"){pop();$("#settings").classList.remove("on");}});
 

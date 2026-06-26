@@ -55,9 +55,9 @@ Three things quietly gate everything downstream:
       per-feed `owner_id` into events.json; `server.py` adds people CRUD
       (`/api/people/{add,update,delete}`), owner assignment via
       `/api/feeds/update`, owner-aware `.ics` CATEGORIES, and people in
-      `/api/info`. Wall legend shows avatars. Covered in `tests/test_people.py`.
-      *Not yet built: an on-wall people-management UI (assign owners from the
-      phone form) — natural to fold into Phase 3.*
+      `/api/info`. Wall legend shows avatars; the Settings sheet has a People
+      editor (add/rename/recolor/avatar) and an owner dropdown per calendar.
+      Covered in `tests/test_people.py`.
 
 ## Phase 3 — Features that ride on the keystone
 
