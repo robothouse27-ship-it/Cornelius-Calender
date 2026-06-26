@@ -183,6 +183,15 @@
   .arow .eicon{width:26px;height:26px;object-fit:contain;flex:0 0 auto;margin-right:2px;}
   .stars{margin-left:auto;font-weight:800;color:var(--butter);font-size:15px;}
 
+  /* manual "sync now" button next to the synced-N-ago label */
+  .syncbtn{display:inline-block;border:0;background:transparent;cursor:pointer;
+    font-size:15px;line-height:1;margin-left:6px;padding:2px;color:inherit;opacity:.7;
+    vertical-align:middle;transition:opacity .15s;}
+  .syncbtn:hover{opacity:1;}
+  .syncbtn.spin{animation:spin360 .8s linear infinite;opacity:1;}
+  .syncbtn:disabled{cursor:default;}
+  @keyframes spin360{to{transform:rotate(360deg);}}
+
   /* ===================== FAB ===================== */
   .fab{
     position:fixed;right:30px;bottom:28px;width:70px;height:70px;border-radius:50%;border:0;cursor:pointer;
@@ -259,7 +268,7 @@
   <div class="topbar">
     <div class="greet">
       <div class="hello" id="hello">Good morning! 🌸</div>
-      <div class="sub"><span id="todayLine">—</span> · <span id="syncTag" style="opacity:.8">…</span></div>
+      <div class="sub"><span id="todayLine">—</span> · <span id="syncTag" style="opacity:.8">…</span><button id="syncBtn" class="syncbtn" title="Sync now" aria-label="Sync now">⟳</button></div>
     </div>
     <div class="chip weather">
       <img class="wxImg" id="wxImg" alt="" hidden>
@@ -552,6 +561,28 @@ function updateSync(){
   el.textContent = mins<1 ? 'synced just now'
                  : mins<60 ? `synced ${mins} min ago`
                  : `synced ${Math.round(mins/60)} h ago`;
+}
+
+/* Manual sync: kick the box's fetcher, spin, then reload once events.json
+   actually changes (it takes the fetcher a few seconds to pull the feeds). */
+let syncing=false;
+async function syncNow(){
+  if(syncing) return;
+  syncing=true;
+  const btn=$("#syncBtn"), tag=$("#syncTag");
+  const before = lastSync ? lastSync.getTime() : 0;
+  btn.disabled=true; btn.classList.add("spin"); tag.textContent='syncing…';
+  try{ await fetch('/api/refresh',{method:'POST'}); }catch(e){/* offline → just reload cache below */}
+  const t0=Date.now(); let fresh=false;
+  while(Date.now()-t0 < 18000){
+    await new Promise(r=>setTimeout(r,1500));
+    await loadEvents();                       // updates lastSync, re-caches
+    if(lastSync && lastSync.getTime()>before){ fresh=true; break; }
+    tag.textContent='syncing…';               // hold the label while we wait
+  }
+  if(fresh){ renderCalendar(); renderAgenda(); renderFamily(); pop(true); }
+  btn.classList.remove("spin"); btn.disabled=false; syncing=false;
+  updateSync();
 }
 
 /* ============================================================
@@ -989,6 +1020,7 @@ function shift(dir){
 $("#prev").addEventListener("click",()=>shift(-1));
 $("#next").addEventListener("click",()=>shift(1));
 $("#today").addEventListener("click",()=>{pop();cursor=new Date(Y,M,D);renderCalendar();});
+$("#syncBtn").addEventListener("click",()=>{pop();syncNow();});
 $("#sleepBtn").addEventListener("click",()=>{pop();sleep();});
 $("#soundBtn").addEventListener("click",()=>{soundOn=!soundOn;store.set('sound',soundOn);updateSoundBtn();if(soundOn)pop(true);});
 
