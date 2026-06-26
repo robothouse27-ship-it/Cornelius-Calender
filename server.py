@@ -36,6 +36,7 @@ EVENTS_PATH = DATA / "events.json"
 FEEDS_PATH = DATA / "feeds.json"
 EXPORT_PATH = DATA / "export.json"   # persistent secret token for the family feed
 PHOTOS_DIR = HERE / "photos"        # drop family photos here for sleep mode
+ICONS_DIR = HERE / "icons"          # pastel sticker icons (weather/chores/events)
 INDEX = HERE / "family-calendar.html"
 PORT = 8080
 WINDOW_SECS = 120  # how long an add-window stays open
@@ -500,6 +501,27 @@ WMO = {
     86: ("🌨️", "Snow showers"), 95: ("⛈️", "Thunderstorm"),
     96: ("⛈️", "Thunderstorm"), 99: ("⛈️", "Thunderstorm"),
 }
+# WMO weather code → sticker icon name (see icons/). Clear/partly skies pick a
+# night variant when it's dark out (is_day == 0).
+WMO_ICON = {
+    0: "wx_clear", 1: "wx_clear", 2: "wx_partly", 3: "wx_cloudy",
+    45: "wx_fog", 48: "wx_fog",
+    51: "wx_rain", 53: "wx_rain", 55: "wx_rain", 56: "wx_rain", 57: "wx_rain",
+    61: "wx_rain", 63: "wx_rain", 65: "wx_rain", 66: "wx_rain", 67: "wx_rain",
+    71: "wx_snow", 73: "wx_snow", 75: "wx_snow", 77: "wx_snow",
+    80: "wx_rain", 81: "wx_rain", 82: "wx_storm",
+    85: "wx_snow", 86: "wx_snow",
+    95: "wx_storm", 96: "wx_storm", 99: "wx_storm",
+}
+
+
+def wx_icon(code, is_day):
+    name = WMO_ICON.get(code, "wx_partly")
+    if name == "wx_clear":
+        return "wx_clear_day" if is_day else "wx_clear_night"
+    return name
+
+
 _geo = {"lat": None, "lon": None, "city": None}
 _weather_cache = {"at": 0.0, "data": None}
 
@@ -541,6 +563,14 @@ def photo_file(fn):
     return send_file(p)
 
 
+@app.route("/icons/<path:fn>")
+def icon_file(fn):
+    p = (ICONS_DIR / fn).resolve()
+    if ICONS_DIR not in p.parents or not p.is_file():   # no path traversal
+        abort(404)
+    return send_file(p)
+
+
 @app.route("/api/weather")
 def weather():
     """Current conditions in °F. Cached ~15 min so we don't hammer the API."""
@@ -552,12 +582,13 @@ def weather():
     try:
         r = requests.get("https://api.open-meteo.com/v1/forecast", timeout=8, params={
             "latitude": g["lat"], "longitude": g["lon"],
-            "current": "temperature_2m,weather_code",
+            "current": "temperature_2m,weather_code,is_day",
             "temperature_unit": "fahrenheit", "timezone": "auto"})
         cur = r.json()["current"]
         emoji, label = WMO.get(cur["weather_code"], ("🌡️", ""))
         data = {"ok": True, "temp": round(cur["temperature_2m"]),
-                "emoji": emoji, "label": label, "city": g.get("city", "")}
+                "emoji": emoji, "label": label, "city": g.get("city", ""),
+                "icon": wx_icon(cur["weather_code"], cur.get("is_day", 1))}
         _weather_cache.update(at=time.time(), data=data)
         return jsonify(data)
     except (requests.RequestException, KeyError, ValueError):

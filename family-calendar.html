@@ -59,6 +59,7 @@
   }
   .chip .big{font-family:"Fredoka";font-weight:600;font-size:clamp(20px,2.6vw,30px);}
   .weather .emoji{font-size:26px;}
+  .weather .wxImg{height:38px;width:38px;object-fit:contain;display:block;}
   .clock .ampm{font-size:14px;color:var(--ink-soft);font-weight:700;align-self:flex-end;margin-bottom:5px;}
 
   /* ---- Toolbar (tactile buttons) ---- */
@@ -169,6 +170,8 @@
   .chore .label{font-weight:700;font-size:15px;flex:1;}
   .chore.done .label{text-decoration:line-through;color:var(--ink-soft);}
   .chore .who{font-weight:800;font-size:12px;padding:3px 9px;border-radius:10px;color:#fff;}
+  .chore .cicon{width:30px;height:30px;object-fit:contain;flex:0 0 auto;}
+  .arow .eicon{width:26px;height:26px;object-fit:contain;flex:0 0 auto;margin-right:2px;}
   .stars{margin-left:auto;font-weight:800;color:var(--butter);font-size:15px;}
 
   /* ===================== FAB ===================== */
@@ -250,6 +253,7 @@
       <div class="sub"><span id="todayLine">—</span> · <span id="syncTag" style="opacity:.8">…</span></div>
     </div>
     <div class="chip weather">
+      <img class="wxImg" id="wxImg" alt="" hidden>
       <span class="emoji" id="wxEmoji">🌡️</span>
       <span class="big" id="wxTemp">—</span>
       <span style="color:var(--ink-soft);font-weight:800" id="wxLabel"></span>
@@ -524,7 +528,9 @@ async function loadWeather(){
     const r=await fetch('/api/weather?_='+Date.now(),{cache:'no-store'});
     const w=await r.json();
     if(!w.ok) return;
-    $("#wxEmoji").textContent=w.emoji;
+    const img=$("#wxImg"), em=$("#wxEmoji");
+    if(w.icon){ img.src='/icons/'+w.icon+'.png'; img.hidden=false; em.style.display='none'; }
+    else { em.textContent=w.emoji; em.style.display=''; img.hidden=true; }
     $("#wxTemp").textContent=w.temp+'°';
     $("#wxLabel").textContent=w.label;
   }catch(e){/* leave whatever's showing */}
@@ -704,6 +710,39 @@ function countdownText(mins){
   return m ? `in ${h}h ${m}m` : `in ${h}h`;
 }
 
+/* keyword → pastel sticker (icons/). First match wins, so list specific
+   patterns before generic ones. No match → null (keep the plain text/emoji). */
+const CHORE_ICONS=[
+  [/sweep|broom|vacuum|\bmop\b|floor/i,'chore_sweep'],
+  [/laundry|fold|towel|wash(ing)? clothes/i,'chore_laundry'],
+  [/dish|set the table|\btable\b|plate/i,'chore_dishes'],
+  [/grocer|shopping|the store/i,'chore_groceries'],
+  [/plant|water|garden|flower/i,'chore_plants'],
+  [/cook|dinner|\bmeal\b|bake|kitchen/i,'chore_cook'],
+  [/trash|garbage|\bbin\b|recycl/i,'chore_trash'],
+  [/\bpig\b|\bpet\b|\bdog\b|\bcat\b|fish|feed|hamster|animal|litter/i,'chore_pet'],
+  [/bath|\btub\b|shower/i,'chore_bath'],
+  [/\bbed\b|bedtime|pajama|pyjama/i,'chore_bed'],
+  [/tidy|clean|\broom\b|\bhouse\b|\bhome\b|dust/i,'chore_house'],
+  [/list|chore|task/i,'chore_checklist'],
+];
+const EVENT_ICONS=[
+  [/birthday|bday|🎂/i,'event_birthday'],
+  [/doctor|dentist|\bdr\.?\b|appt|appointment|checkup|clinic|medical|vaccin|therapy/i,'event_doctor'],
+  [/party|celebrat|🎉|🎈/i,'event_party'],
+  [/trip|vacation|flight|travel|road ?trip|\bdrive\b|airport|camping/i,'event_trip'],
+  [/\bgym\b|workout|yoga|\brun\b|exercise|fitness|practice|soccer|swim|dance|pilates/i,'event_gym'],
+  [/pay ?day|rent|\bbill|bank|paycheck|\bmoney\b|invoice/i,'event_money'],
+  [/\bcall\b|phone|zoom|facetime|video chat/i,'event_call'],
+  [/school|class|homework|exam|study|lecture|tutor|college/i,'event_school'],
+  [/christmas|holiday|thanksgiving|easter|hanukkah|halloween/i,'event_holiday'],
+  [/anniversary|date night|\bfamily\b|reunion|wedding/i,'event_family'],
+  [/work|meeting|standup|office|interview|deadline|conference/i,'event_work'],
+  [/reminder|\bdue\b|errand/i,'event_appt'],
+];
+function pickIcon(table,text){ for(const [re,ic] of table) if(re.test(text||'')) return ic; return null; }
+function iconImg(name,cls){ return name?`<img class="${cls}" src="/icons/${name}.png" alt="">`:''; }
+
 function renderAgenda(){
   const a=$("#agenda"); a.innerHTML="";
   const list=events.filter(e=>e.date===TODAY_KEY).sort((x,y)=>minsOf(x.time)-minsOf(y.time));
@@ -718,8 +757,9 @@ function renderAgenda(){
       const mins=Math.round((eventStart(e)-now)/60000);
       badge=`<span class="badge">${countdownText(mins)}</span>`;
     }
+    const ic=iconImg(pickIcon(EVENT_ICONS,e.title),"eicon");
     r.innerHTML=`<span class="dot" style="background:${e.color||famColor(e.fam)}"></span>
-      <span class="when">${e.time}</span><span class="what">${e.title}</span>${badge}`;
+      <span class="when">${e.time}</span>${ic}<span class="what">${e.title}</span>${badge}`;
     a.appendChild(r);
   });
 }
@@ -729,8 +769,12 @@ function renderChores(){
   chores.forEach((ch,i)=>{
     const row=document.createElement("div");row.className="chore"+(ch.done?" done":"");
     const who = FAMILY[ch.who] || FAMILY[0] || {name:"—",color:"#A98CFF"};
-    row.innerHTML=`<div class="check">✓</div>
-      <div class="label">${ch.label}</div>
+    const icName=pickIcon(CHORE_ICONS,ch.label);
+    const ic=iconImg(icName,"cicon");
+    // the sticker stands in for any emoji in the label — drop a trailing one
+    const label=icName ? ch.label.replace(/\s*[\p{Extended_Pictographic}️‍]+\s*$/u,'') : ch.label;
+    row.innerHTML=`<div class="check">✓</div>${ic}
+      <div class="label">${label}</div>
       <span class="who" style="background:${who.color}">${who.name}</span>`;
     row.querySelector(".check").addEventListener("click",e=>{
       e.stopPropagation();
