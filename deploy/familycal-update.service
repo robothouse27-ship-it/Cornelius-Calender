@@ -1,0 +1,11 @@
+[Unit]
+Description=Family Calendar self-update (git pull from GitHub)
+After=network-online.target familycal-web.service
+Wants=network-online.target
+
+[Service]
+# Runs as root so it can restart familycal-web; the script does the actual
+# git/pip work as the repo owner so file ownership stays correct.
+Type=oneshot
+WorkingDirectory=__APPDIR__
+ExecStart=__APPDIR__/deploy/update.sh

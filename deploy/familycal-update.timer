@@ -1,0 +1,11 @@
+[Unit]
+Description=Check GitHub for Family Calendar updates every 10 minutes
+
+[Timer]
+# 2 min after boot, then every 10 min
+OnBootSec=2min
+OnUnitActiveSec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

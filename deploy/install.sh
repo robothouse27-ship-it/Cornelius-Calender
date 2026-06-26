@@ -22,15 +22,23 @@ echo "→ priming events.json"
 "$APPDIR/.venv/bin/python" "$APPDIR/fetcher.py" || echo "  (initial fetch failed — feeds may be empty; that's OK)"
 chmod 600 "$APPDIR/data/feeds.json" 2>/dev/null || true
 
-# 3. systemd units (web service + fetch timer), with paths/user filled in
+# 3. systemd units (web + fetch + self-update), with paths/user filled in
 echo "→ installing systemd units"
 render() { sed -e "s|__APPDIR__|$APPDIR|g" -e "s|__USER__|$USER_NAME|g" "$1"; }
-for unit in familycal-web.service familycal-fetch.service familycal-fetch.timer; do
+for unit in familycal-web.service familycal-fetch.service familycal-fetch.timer \
+            familycal-update.service familycal-update.timer; do
   render "$APPDIR/deploy/$unit" | sudo tee "/etc/systemd/system/$unit" >/dev/null
 done
 sudo systemctl daemon-reload
 sudo systemctl enable --now familycal-web.service
 sudo systemctl enable --now familycal-fetch.timer
+
+# Keep auto-update from ever fighting the wall's own data: feeds.json is
+# tracked (for the initial seed) but the wall rewrites it when you add a
+# calendar — tell git to leave the local copy alone so pulls never conflict.
+chmod +x "$APPDIR/deploy/update.sh"
+git -C "$APPDIR" update-index --skip-worktree data/feeds.json 2>/dev/null || true
+sudo systemctl enable --now familycal-update.timer
 
 # 4. Kiosk autostart (.desktop in the user's autostart dir)
 echo "→ installing kiosk autostart"

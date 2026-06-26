@@ -1091,6 +1091,24 @@ setInterval(()=>{ checkReminders(); renderAgenda(); }, 30*1000); // nudge + live
 
 loadPhotos();
 setInterval(loadPhotos, 10*60*1000);  // pick up newly-added photos
+
+/* Self-update: when auto-pull lands new code on the box, the app file's
+   mtime bumps — reload the wall so it shows the new version hands-free.
+   Only reload while idle (no modal open) so we never interrupt an add. */
+let appVersion = null;
+async function checkUpdate(){
+  try{
+    const r = await fetch('/api/version?_='+Date.now(), {cache:'no-store'});
+    const {v} = await r.json();
+    if(!v) return;
+    if(appVersion === null){ appVersion = v; return; }   // first read = baseline
+    if(v !== appVersion && !$("#modal").classList.contains("on")){
+      location.reload();
+    }
+  }catch(e){/* offline — try again next tick */}
+}
+checkUpdate();
+setInterval(checkUpdate, 2*60*1000);   // check for new code every 2 min
 </script>
 </body>
 </html>

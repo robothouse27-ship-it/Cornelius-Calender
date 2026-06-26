@@ -107,6 +107,16 @@ def index():
     return send_file(INDEX)
 
 
+@app.route("/api/version")
+def version():
+    # mtime of the app file — bumps whenever auto-update pulls new code,
+    # so the wall can reload itself without anyone touching it.
+    try:
+        return jsonify({"v": int(INDEX.stat().st_mtime)})
+    except OSError:
+        return jsonify({"v": 0})
+
+
 @app.route("/events.json")
 def events():
     if EVENTS_PATH.exists():

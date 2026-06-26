@@ -25,8 +25,9 @@ bash deploy/install.sh
 It will:
 - build the Python venv + install deps, create `photos/`
 - prime `data/events.json` from `data/feeds.json`
-- install + enable the **web service** (`familycal-web`) and the **10-min
-  fetch timer** (`familycal-fetch`)
+- install + enable the **web service** (`familycal-web`), the **10-min
+  fetch timer** (`familycal-fetch`), and the **10-min self-update timer**
+  (`familycal-update`)
 - install the **Chromium kiosk autostart** for your user
 
 `sudo` is used only for the systemd unit installs; it'll prompt once.
@@ -39,6 +40,20 @@ curl -s localhost:8080/events.json | head -c 200
 ```
 Open `http://localhost:8080` in a browser on the box. Then **reboot** — it
 should come up fullscreen on its own.
+
+## Auto-updates
+Once installed, the wall keeps itself current: every 10 min `familycal-update`
+does a fast-forward `git pull` from GitHub. When new code lands, the browser
+notices (via `/api/version`) and **reloads itself within ~2 min** — no touching
+the wall. Server-side (`.py`) changes restart the web service automatically; a
+changed `requirements.txt` is reinstalled into the venv.
+
+It's deliberately safe: pulls are fast-forward only, and the wall's own
+`data/feeds.json` (calendars you add from the screen) is marked `--skip-worktree`
+so a pull never clobbers it. To push an update from your Mac, just
+`git push`; to update on demand on the box: `sudo systemctl start familycal-update`.
+Check it with `systemctl list-timers familycal-update` and
+`journalctl -u familycal-update -e`.
 
 ## 4. Daily use
 - **Add a calendar:** on the wall, 🎨 → 📲 Add a calendar → scan with a phone.
