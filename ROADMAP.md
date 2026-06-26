@@ -67,8 +67,15 @@ Three things quietly gate everything downstream:
       Family panel became a "who's today" strip (each person → their next event
       + count today, or "free"), and agenda rows show the owner's avatar.
       Frontend-only (no backend change); owner-grouping logic verified.
-- [ ] **Recurring chore rotation** — auto-assign chores by person/day; needs the
-      person model.
+- [x] **Recurring chore rotation** — auto-assign chores by person/day; needs the
+      person model. DONE 2026-06-26 — assignee is computed
+      `pool[(seed + days-since-epoch) % n]` (pool = people registry, legacy
+      family fallback), so it rotates one person daily at midnight with no
+      timer; `done` is per-day (`doneDate === today`) and auto-resets. Chores
+      render grouped under each person (avatar + color), and a Settings chore
+      editor adds/renames/removes them. Pool = all people for now (a per-person
+      "in rotation" toggle is a future refinement). Frontend-only; rotation +
+      grouping logic verified.
 - [ ] **Countdown widgets** — "12 days till the trip." Independent, easy win,
       slot in anytime here.
 

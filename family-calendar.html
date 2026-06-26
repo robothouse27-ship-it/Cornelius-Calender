@@ -183,6 +183,11 @@
   .chore .label{font-weight:700;font-size:15px;flex:1;}
   .chore.done .label{text-decoration:line-through;color:var(--ink-soft);}
   .chore .who{font-weight:800;font-size:12px;padding:3px 9px;border-radius:10px;color:#fff;}
+  .chore-person{margin:10px 0 5px;}
+  .chore-person:first-child{margin-top:0;}
+  .chore-person .who{display:inline-block;font-weight:800;font-size:12.5px;padding:4px 11px;border-radius:11px;color:#fff;}
+  .chore-person + .chore{margin-left:6px;}
+  .chore + .chore{margin-left:6px;}
   .chore .cicon{width:30px;height:30px;object-fit:contain;flex:0 0 auto;}
   .arow .eicon{width:26px;height:26px;object-fit:contain;flex:0 0 auto;margin-right:2px;}
   /* sticker icons replacing UI emoji */
@@ -383,6 +388,11 @@
       <label>People</label>
       <div id="peopleEditor"></div>
       <button class="btn" id="addPerson" style="margin-top:8px;font-size:15px;padding:12px 18px;">🙂 Add a person</button>
+    </div>
+    <div class="field">
+      <label>Chores <span style="font-weight:700;color:var(--ink-soft);font-size:12px;">· rotate daily through everyone</span></label>
+      <div id="choreEditor"></div>
+      <button class="btn" id="addChore" style="margin-top:8px;font-size:15px;padding:12px 18px;">🧹 Add a chore</button>
     </div>
     <div class="field">
       <label>Calendars &amp; colors</label>
@@ -616,13 +626,39 @@ async function syncNow(){
 /* ============================================================
    CHORES
    ============================================================ */
-let chores = store.get('chores', [
-  {label:"Feed the pig 🐷", who:3, done:false},
-  {label:"Tidy play room",  who:2, done:false},
-  {label:"Take out trash",  who:1, done:false},
-  {label:"Water plants 🌱", who:2, done:false},
-]);
+const DEFAULT_CHORES = [
+  {label:"Feed the pig 🐷", seed:0},
+  {label:"Tidy play room",  seed:1},
+  {label:"Take out trash",  seed:2},
+  {label:"Water plants 🌱", seed:3},
+];
+/* Normalize whatever's stored to the rotation shape {label, seed, doneDate}.
+   Migrates the old {label, who, done}: the fixed `who` becomes the rotation
+   seed, and a stale `done` flag is dropped (done is now per-day). */
+let chores = (store.get('chores', null) || DEFAULT_CHORES).map((ch,i)=>({
+  label: ch.label,
+  seed: (typeof ch.seed==='number') ? ch.seed
+        : (typeof ch.who==='number') ? ch.who : i,
+  doneDate: ch.doneDate || null,
+}));
 function saveChores(){ store.set('chores', chores); }
+
+/* Daily rotation: assignee = pool[(seed + whole-days-since-epoch) % n].
+   Pool is the people registry, falling back to the legacy family list. */
+function chorePool(){
+  return PEOPLE.length
+    ? PEOPLE.map(p=>({key:p.id,name:p.name,color:p.color,avatar:p.avatar}))
+    : FAMILY;
+}
+function dayNumber(){
+  const n=new Date();
+  return Math.floor(Date.UTC(n.getFullYear(),n.getMonth(),n.getDate())/86400000);
+}
+function choreAssignee(ch, pool){
+  pool = pool || chorePool();
+  if(!pool.length) return {name:"—",color:"#A98CFF"};
+  return pool[(((ch.seed||0)+dayNumber())%pool.length+pool.length)%pool.length];
+}
 
 /* ============================================================
    RENDER
@@ -842,26 +878,42 @@ function renderAgenda(){
 
 function renderChores(){
   const c=$("#chores"); c.innerHTML="";
-  chores.forEach((ch,i)=>{
-    const row=document.createElement("div");row.className="chore"+(ch.done?" done":"");
-    const who = FAMILY[ch.who] || FAMILY[0] || {name:"—",color:"#A98CFF"};
-    const icName=pickIcon(CHORE_ICONS,ch.label);
-    const ic=iconImg(icName,"cicon");
-    // the sticker stands in for any emoji in the label — drop a trailing one
-    const label=icName ? ch.label.replace(/\s*[\p{Extended_Pictographic}️‍]+\s*$/u,'') : ch.label;
-    row.innerHTML=`<div class="check">✓</div>${ic}
-      <div class="label">${label}</div>
-      <span class="who" style="background:${who.color}">${who.name}</span>`;
-    row.querySelector(".check").addEventListener("click",e=>{
-      e.stopPropagation();
-      ch.done=!ch.done; saveChores(); renderChores();
-      if(ch.done){ pop(true); confettiBurst(); }
-    });
-    c.appendChild(row);
+  if(!chores.length){c.innerHTML=`<div class="empty" style="padding:14px 6px">No chores yet — add some in ⚙️ Settings.</div>`;return;}
+  const pool=chorePool();
+  // assign each chore to today's rotated person, grouped by that person
+  const groups=new Map();
+  chores.forEach(ch=>{
+    const who=choreAssignee(ch,pool);
+    const k=who.key||who.name;
+    if(!groups.has(k)) groups.set(k,{who,items:[]});
+    groups.get(k).items.push(ch);
   });
-  const earned=chores.filter(c=>c.done).length;
+  // keep person order stable (pool order), unknowns last
+  [...groups.values()]
+    .sort((a,b)=>(pool.indexOf(a.who)+1||99)-(pool.indexOf(b.who)+1||99))
+    .forEach(g=>{
+      const head=document.createElement("div");head.className="chore-person";
+      const ava=g.who.avatar?`${g.who.avatar} `:"";
+      head.innerHTML=`<span class="who" style="background:${g.who.color}">${ava}${g.who.name}</span>`;
+      c.appendChild(head);
+      g.items.forEach(ch=>{
+        const done = ch.doneDate===TODAY_KEY;
+        const row=document.createElement("div");row.className="chore"+(done?" done":"");
+        const icName=pickIcon(CHORE_ICONS,ch.label);
+        const ic=iconImg(icName,"cicon");
+        const label=icName ? ch.label.replace(/\s*[\p{Extended_Pictographic}️‍]+\s*$/u,'') : ch.label;
+        row.innerHTML=`<div class="check">✓</div>${ic}<div class="label">${label}</div>`;
+        row.querySelector(".check").addEventListener("click",e=>{
+          e.stopPropagation();
+          ch.doneDate = done ? null : TODAY_KEY; saveChores(); renderChores();
+          if(!done){ pop(true); confettiBurst(); }
+        });
+        c.appendChild(row);
+      });
+    });
+  const earned=chores.filter(c=>c.doneDate===TODAY_KEY).length;
   const star=document.createElement("div");
-  star.style.cssText="text-align:center;font-weight:800;color:var(--butter);margin-top:4px;font-size:15px;";
+  star.style.cssText="text-align:center;font-weight:800;color:var(--butter);margin-top:6px;font-size:15px;";
   star.innerHTML=`⭐ ${earned} / ${chores.length} done today`;
   c.appendChild(star);
 }
@@ -1197,7 +1249,39 @@ async function addPerson(){
   }catch(e){/* offline — ignore */}
 }
 $("#addPerson").addEventListener("click",()=>{pop();addPerson();});
-$("#settingsBtn").addEventListener("click",()=>{pop();$("#settings").classList.add("on");renderThemePicker();loadFeeds().then(()=>{renderPeopleEditor();renderFeedEditor();});});
+
+/* Chore editor: add/rename/remove chores. Assignment is automatic (daily
+   rotation through the people), so there's no per-chore owner to set here. */
+function renderChoreEditor(){
+  const wrap=$("#choreEditor");wrap.innerHTML="";
+  if(!chores.length){
+    wrap.innerHTML=`<div class="empty" style="padding:8px 4px">No chores yet — add the family's recurring tasks; they rotate by day.</div>`;
+    return;
+  }
+  chores.forEach((ch,i)=>{
+    const row=document.createElement("div");row.className="fam-edit";
+    row.innerHTML=`<input type="text" value="${ch.label.replace(/"/g,'&quot;')}" maxlength="40">
+      <button class="del" title="Remove"><img class="ctrlIcon" src="/icons/ui_delete.png" alt="Remove"></button>`;
+    const name=row.querySelector('input[type=text]');
+    const del=row.querySelector('.del');
+    name.addEventListener("change",()=>{ ch.label=name.value.trim()||ch.label; saveChores(); renderChores(); });
+    del.addEventListener("click",()=>{
+      pop();
+      chores.splice(i,1); saveChores(); renderChoreEditor(); renderChores();
+    });
+    wrap.appendChild(row);
+  });
+}
+function addChore(){
+  const label=(prompt("New chore? (e.g. Take out trash)")||"").trim();
+  if(!label) return;
+  // seed = current length so a new chore lands on the next person, staggered
+  chores.push({label, seed:chores.length, doneDate:null});
+  saveChores(); renderChoreEditor(); renderChores(); pop(true);
+}
+$("#addChore").addEventListener("click",()=>{pop();addChore();});
+
+$("#settingsBtn").addEventListener("click",()=>{pop();$("#settings").classList.add("on");renderThemePicker();renderChoreEditor();loadFeeds().then(()=>{renderPeopleEditor();renderFeedEditor();});});
 $("#sDone").addEventListener("click",()=>{pop();$("#settings").classList.remove("on");});
 $("#settings").addEventListener("click",e=>{if(e.target.id==="settings"){pop();$("#settings").classList.remove("on");}});
 
