@@ -5,32 +5,9 @@ while healthy feeds refresh. events.json must always be written atomically and
 remain valid JSON.
 """
 import json
-from datetime import date
-
-import pytest
 
 import fetcher
-from conftest import make_ics, vevent
-
-
-@pytest.fixture
-def isolated_data(tmp_path, monkeypatch):
-    """Redirect fetcher's data paths into a tmp dir."""
-    data = tmp_path / "data"
-    data.mkdir()
-    monkeypatch.setattr(fetcher, "DATA", data)
-    monkeypatch.setattr(fetcher, "FEEDS_PATH", data / "feeds.json")
-    monkeypatch.setattr(fetcher, "EVENTS_PATH", data / "events.json")
-    # Pin the window so our fixed-date ICS lands inside it.
-    monkeypatch.setattr(
-        fetcher, "window_bounds",
-        lambda today=None: (date(2026, 5, 1), date(2026, 8, 1)),
-    )
-    return data
-
-
-def write_json(path, doc):
-    path.write_text(json.dumps(doc))
+from conftest import make_ics, vevent, write_json
 
 
 def test_dead_feed_keeps_cached_events(isolated_data, monkeypatch):

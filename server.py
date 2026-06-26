@@ -140,6 +140,76 @@ def info():
                     "feeds": load_feeds().get("feeds", [])})
 
 
+# how long the merged sync may go without a fresh run before it's "stale".
+# The fetch timer runs every 10 min; 35 min ≈ 3 missed cycles.
+SYNC_STALE_SECS = 35 * 60
+
+
+def _iso_age(iso, now):
+    """Seconds between an ISO timestamp and now (tz-safe); None if unparseable."""
+    if not iso:
+        return None
+    try:
+        dt = datetime.fromisoformat(iso)
+    except (ValueError, TypeError):
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return int((now - dt).total_seconds())
+
+
+@app.route("/api/health")
+def health():
+    """Liveness for the wall + future status UI: last-good sync + per-feed state.
+
+    Reads the same events.json the fetcher writes (it records per-feed
+    status/last_ok/error). Unauthenticated like /api/info and deliberately
+    leaks no feed URLs — errors are pre-classified by the fetcher.
+    """
+    now = datetime.now(timezone.utc)
+    if not EVENTS_PATH.exists():
+        return jsonify({"ok": False, "status": "never_synced",
+                        "generated_at": None, "age_seconds": None,
+                        "feeds": [], "summary": {"total": 0, "ok": 0, "stale": 0}})
+    try:
+        doc = json.loads(EVENTS_PATH.read_text())
+    except (ValueError, OSError):
+        return jsonify({"ok": False, "status": "unreadable",
+                        "generated_at": None, "age_seconds": None,
+                        "feeds": [], "summary": {"total": 0, "ok": 0, "stale": 0}})
+
+    gen = doc.get("generated_at")
+    age = _iso_age(gen, now)
+    sync_stale = age is not None and age > SYNC_STALE_SECS
+
+    feeds_out, n_ok, n_stale = [], 0, 0
+    for f in doc.get("feeds", []):
+        status = f.get("status", "unknown")
+        if status == "ok":
+            n_ok += 1
+        elif status == "stale":
+            n_stale += 1
+        feeds_out.append({
+            "id": f.get("id"), "name": f.get("name"), "status": status,
+            "last_ok": f.get("last_ok"),
+            "last_ok_age_seconds": _iso_age(f.get("last_ok"), now),
+            "events": f.get("count"), "error": f.get("error"),
+        })
+
+    healthy = gen is not None and n_stale == 0 and not sync_stale
+    return jsonify({
+        "ok": healthy,
+        "status": "ok" if healthy else "degraded",
+        "generated_at": gen,
+        "age_seconds": age,
+        "sync_stale": sync_stale,
+        "timezone": doc.get("timezone"),
+        "event_count": len(doc.get("events", [])),
+        "feeds": feeds_out,
+        "summary": {"total": len(feeds_out), "ok": n_ok, "stale": n_stale},
+    })
+
+
 @app.route("/api/feeds/update", methods=["POST"])
 def feeds_update():
     """Rename / recolor / enable-disable an existing feed (milestone 5)."""

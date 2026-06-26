@@ -66,6 +66,24 @@ def to_local_aware(value):
     return datetime.combine(value, dtime.min, tzinfo=TZ)
 
 
+def classify_error(ex):
+    """A short, safe error label for the health endpoint.
+
+    Never return the raw exception string: requests embeds the full feed URL
+    (the secret webcal link) in its messages, and the health endpoint is
+    unauthenticated on the LAN. Keep it useful but leak nothing.
+    """
+    if isinstance(ex, requests.HTTPError) and ex.response is not None:
+        return f"HTTP {ex.response.status_code}"
+    if isinstance(ex, requests.Timeout):
+        return "timeout"
+    if isinstance(ex, requests.ConnectionError):
+        return "connection error"
+    if isinstance(ex, ValueError):
+        return "parse error"
+    return type(ex).__name__
+
+
 def fetch_feed_text(url):
     """Download an .ics feed. webcal:// -> https://."""
     if url.startswith("webcal://"):
@@ -117,25 +135,34 @@ def main():
     prev_by_feed = {}
     for e in prev.get("events", []):
         prev_by_feed.setdefault(e.get("feed_id"), []).append(e)
+    # prior per-feed health, so a feed that fails this run keeps its last_ok
+    prev_health = {f.get("id"): f for f in prev.get("feeds", [])}
 
+    now = datetime.now(TZ)
+    now_iso = now.isoformat()
     all_events = []
     feed_meta = []
     for feed in feeds:
-        feed_meta.append({"id": feed["id"], "name": feed.get("name", "Calendar"),
-                          "color": feed.get("color", "#A98CFF")})
+        meta = {"id": feed["id"], "name": feed.get("name", "Calendar"),
+                "color": feed.get("color", "#A98CFF")}
+        feed_meta.append(meta)
+        prior = prev_health.get(feed["id"], {})
         try:
             text = fetch_feed_text(feed["url"])
             evts = parse_feed(text, feed, win_start, win_end)
             log(f"{feed.get('name')}: {len(evts)} events")
             all_events.extend(evts)
+            meta.update(status="ok", last_ok=now_iso, count=len(evts), error=None)
         except Exception as ex:  # noqa: BLE001 — resilience is the whole point
             kept = prev_by_feed.get(feed["id"], [])
             log(f"{feed.get('name')}: FAILED ({ex}); keeping {len(kept)} cached")
             all_events.extend(kept)
+            meta.update(status="stale", last_ok=prior.get("last_ok"),
+                        count=len(kept), error=classify_error(ex))
 
     all_events.sort(key=lambda e: e["start"])
     doc = {
-        "generated_at": datetime.now(TZ).isoformat(),
+        "generated_at": now_iso,
         "window": {"start": win_start.isoformat(), "end": win_end.isoformat()},
         "timezone": TZ_NAME,
         "feeds": feed_meta,

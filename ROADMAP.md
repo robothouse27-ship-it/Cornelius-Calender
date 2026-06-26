@@ -37,8 +37,12 @@ Three things quietly gate everything downstream:
       `tests/` (17 tests, `.venv/bin/pytest`). Caught + fixed a real bug:
       timed events with no DTEND rendered zero-duration (the 1h default never
       fired because `recurring_ical_events` synthesizes `DTEND==DTSTART`).
-- [ ] **Health/status endpoint** (`/api/health` → last-good-sync, per-feed
-      liveness). Feeds Phase 3's status UI.
+- [x] **Health/status endpoint** (`/api/health` → last-good-sync, per-feed
+      liveness). Feeds Phase 3's status UI. DONE 2026-06-26 — `fetcher.py` now
+      records per-feed `status`/`last_ok`/`count`/`error` into events.json
+      (errors *classified*, never raw, so the secret feed URL can't leak);
+      `/api/health` reports overall `ok`, sync staleness (>35 min = 3 missed
+      10-min cycles), and per-feed state. Covered in `tests/test_health.py`.
 
 ## Phase 2 — The "who" model (keystone)
 *Small data-model change; the hinge three features hang on. Do third.*

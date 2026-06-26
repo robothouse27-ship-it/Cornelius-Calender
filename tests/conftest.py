@@ -4,13 +4,36 @@ We pin FAMILYCAL_TZ *before* importing fetcher so the module-level TZ is
 deterministic regardless of the machine's environment, then expose a small
 ICS-builder so individual tests can describe feeds inline (no network).
 """
+import json
 import os
 import textwrap
+from datetime import date
+
+import pytest
 
 # Pin the timezone before fetcher reads it at import time.
 os.environ.setdefault("FAMILYCAL_TZ", "America/Los_Angeles")
 
 import fetcher  # noqa: E402  (import after env is set, on purpose)
+
+
+@pytest.fixture
+def isolated_data(tmp_path, monkeypatch):
+    """Redirect fetcher's data paths into a tmp dir + pin the fetch window."""
+    data = tmp_path / "data"
+    data.mkdir()
+    monkeypatch.setattr(fetcher, "DATA", data)
+    monkeypatch.setattr(fetcher, "FEEDS_PATH", data / "feeds.json")
+    monkeypatch.setattr(fetcher, "EVENTS_PATH", data / "events.json")
+    monkeypatch.setattr(
+        fetcher, "window_bounds",
+        lambda today=None: (date(2026, 5, 1), date(2026, 8, 1)),
+    )
+    return data
+
+
+def write_json(path, doc):
+    path.write_text(json.dumps(doc))
 
 
 def make_ics(*vevents):
