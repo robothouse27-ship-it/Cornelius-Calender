@@ -151,8 +151,44 @@
   .mini .md.tdy{background:var(--grad-hero);color:#fff;}
   .mini .md.tdy.has::after{background:#fff;}
 
-  /* ---- Right rail ---- */
+  /* ---- Dashboard: one big focus widget + a rail of small tiles ---- */
+  .focus-zone{flex:1;display:flex;min-width:0;}
+  .focus-zone > .widget{flex:1;}
   .rail{width:clamp(280px,26vw,360px);display:flex;flex-direction:column;gap:16px;min-height:0;}
+  .rail > .widget{flex:1 1 0;min-height:0;}
+
+  .widget{display:flex;flex-direction:column;min-height:0;overflow:hidden;}
+  .widget .w-head{display:flex;align-items:center;gap:8px;font-family:"Fredoka";font-weight:600;font-size:19px;padding:14px 16px 8px;}
+  .widget .w-title{flex:1;display:flex;align-items:center;gap:8px;min-width:0;}
+  .widget .w-title img.hicon{width:30px;height:30px;object-fit:contain;flex:0 0 auto;}
+  .widget .w-title .hemoji{font-size:24px;line-height:1;flex:0 0 auto;}
+  .widget .w-grip{display:none;color:var(--ink-soft);font-size:17px;cursor:grab;flex:0 0 auto;}
+  .widget .w-body{flex:1;min-height:0;overflow:auto;padding:0 16px 14px;scrollbar-width:none;}
+  .widget .w-body::-webkit-scrollbar{display:none;}
+
+  /* focused widget: bigger title, calendar fills + doesn't scroll */
+  .focus-zone .widget .w-title{font-size:clamp(22px,2.6vw,30px);}
+  #w-calendar:not(.tile) .w-body{overflow:hidden;display:flex;flex-direction:column;}
+  #w-calendar:not(.tile) .cal-full{flex:1;display:flex;flex-direction:column;min-height:0;}
+  #w-calendar .cal-mini{display:none;}
+  #w-calendar.tile .cal-full{display:none;}
+  #w-calendar.tile .cal-mini{display:block;}
+
+  /* tiles: tappable to promote, draggable to reorder */
+  .rail .widget.tile{cursor:pointer;touch-action:none;}
+  .rail .widget.tile .w-grip{display:inline-block;}
+  .rail .widget.tile .w-head{font-size:16px;padding:10px 13px 5px;}
+  .rail .widget.tile .w-title{font-size:16px;}
+  .rail .widget.tile .w-body{padding:0 13px 11px;pointer-events:none;}  /* tap promotes; no inner interaction */
+  .rail .widget.tile.dragging{opacity:.55;transform:scale(.98);}
+  .rail .widget.tile:active{transform:scale(.985);}
+  /* the Day/Week/Month/Year + nav controls only make sense for the calendar */
+  body:not(.cal-focused) #viewSeg,
+  body:not(.cal-focused) #prev,
+  body:not(.cal-focused) #today,
+  body:not(.cal-focused) #next{display:none;}
+
+  /* legacy panel styles still used inside widget bodies */
   .panel{padding:16px 16px 14px;display:flex;flex-direction:column;min-height:0;}
   .panel h3{font-family:"Fredoka";font-weight:600;font-size:19px;margin:0 0 10px;display:flex;align-items:center;gap:8px;}
   .agenda{flex:1;overflow:hidden;}
@@ -327,35 +363,48 @@
     <button class="icon-btn" id="sleepBtn" title="Sleep"><img class="btnIcon" src="/icons/ui_moon.png" alt="Sleep"></button>
   </div>
 
-  <!-- MAIN -->
+  <!-- MAIN — a dashboard: one big "focus" widget + a rail of small tiles.
+       Tap a tile to promote it; press-drag a tile to reorder. JS distributes
+       the widgets (below) into #focus / #rail and remembers your choice. -->
   <div class="main">
-    <div class="cal card">
-      <div class="cal-head">
-        <div class="cal-title" id="calTitle">—</div>
-      </div>
-      <div class="dow" id="dow"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
-      <div class="grid" id="grid"></div>
-    </div>
-
-    <div class="rail">
-      <div class="panel card agenda">
-        <h3><img class="hicon" src="/icons/ui_today.png" alt="">Today</h3>
-        <div class="agenda-scroll" id="agenda"></div>
-      </div>
-      <div class="panel card">
-        <h3><img class="hicon" src="/icons/ui_chores.png" alt="">Chores</h3>
-        <div id="chores"></div>
-      </div>
-      <div class="panel card">
-        <h3><img class="hicon" src="/icons/ui_family.png" alt="">Family</h3>
-        <div class="fam" id="fam"></div>
-      </div>
-      <div class="panel card" id="cdPanel" style="display:none;">
-        <h3><span class="hemoji">⏳</span>Countdowns</h3>
-        <div class="cd" id="countdowns"></div>
-      </div>
-    </div>
+    <div id="focus" class="focus-zone"></div>
+    <div id="rail" class="rail"></div>
   </div>
+</div>
+
+<!-- Widget definitions. JS moves these into #focus / #rail on boot. -->
+<div id="wstore" hidden>
+  <section class="widget card" id="w-calendar" data-w="calendar">
+    <header class="w-head"><span class="w-grip" aria-hidden="true">⠿</span>
+      <span class="w-title"><img class="hicon" src="/icons/ui_today.png" alt=""><span id="calTitle">Calendar</span></span></header>
+    <div class="w-body">
+      <div class="cal-full">
+        <div class="dow" id="dow"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
+        <div class="grid" id="grid"></div>
+      </div>
+      <div class="cal-mini" id="calMini"></div>
+    </div>
+  </section>
+  <section class="widget card" id="w-today" data-w="today">
+    <header class="w-head"><span class="w-grip" aria-hidden="true">⠿</span>
+      <span class="w-title"><img class="hicon" src="/icons/ui_today.png" alt="">Today</span></header>
+    <div class="w-body"><div class="agenda-scroll" id="agenda"></div></div>
+  </section>
+  <section class="widget card" id="w-chores" data-w="chores">
+    <header class="w-head"><span class="w-grip" aria-hidden="true">⠿</span>
+      <span class="w-title"><img class="hicon" src="/icons/ui_chores.png" alt="">Chores</span></header>
+    <div class="w-body"><div id="chores"></div></div>
+  </section>
+  <section class="widget card" id="w-family" data-w="family">
+    <header class="w-head"><span class="w-grip" aria-hidden="true">⠿</span>
+      <span class="w-title"><img class="hicon" src="/icons/ui_family.png" alt="">Family</span></header>
+    <div class="w-body"><div class="fam" id="fam"></div></div>
+  </section>
+  <section class="widget card" id="w-countdowns" data-w="countdowns">
+    <header class="w-head"><span class="w-grip" aria-hidden="true">⠿</span>
+      <span class="w-title"><span class="hemoji">⏳</span>Countdowns</span></header>
+    <div class="w-body"><div class="cd" id="countdowns"></div></div>
+  </section>
 </div>
 
 <button class="fab" id="fab">+</button>
@@ -713,13 +762,13 @@ function daysUntil(dateStr){
   return Math.round((Date.UTC(y,m-1,d)-Date.UTC(n.getFullYear(),n.getMonth(),n.getDate()))/86400000);
 }
 function renderCountdowns(){
-  const panel=$("#cdPanel"), wrap=$("#countdowns");
+  const wrap=$("#countdowns"); if(!wrap) return;
   const live=countdowns
     .map(cd=>({cd,days:daysUntil(cd.date)}))
     .filter(x=>x.days!==null && x.days>=0)        // hide past ones from the wall
     .sort((a,b)=>a.days-b.days);
-  if(!live.length){ panel.style.display="none"; wrap.innerHTML=""; return; }
-  panel.style.display=""; wrap.innerHTML="";
+  wrap.innerHTML="";
+  if(!live.length){ wrap.innerHTML=`<div class="empty" style="padding:14px 6px">No countdowns yet — add one in ⚙️ Settings.</div>`; return; }
   live.forEach(({cd,days})=>{
     const row=document.createElement("div");
     row.className="cd-row"+(days<=7?" soon":"");
@@ -766,8 +815,87 @@ function evChip(e){ // compact chip (month/week)
 }
 
 /* dispatcher — picks the active view and updates header/grid */
+/* ============================================================
+   DASHBOARD  — one big focus widget + a rail of tappable, draggable
+   tiles. State {focus, order} persists so it survives a reboot.
+   ============================================================ */
+const WIDGETS=['calendar','today','chores','family','countdowns'];
+let layout=store.get('layout',{focus:'calendar',order:['today','chores','family','countdowns']});
+function saveLayout(){ store.set('layout',layout); }
+function widgetEl(w){ return document.getElementById('w-'+w); }
+function normalizeLayout(){
+  if(!WIDGETS.includes(layout.focus)) layout.focus='calendar';
+  const rest=WIDGETS.filter(w=>w!==layout.focus);
+  const kept=(layout.order||[]).filter(w=>rest.includes(w));
+  layout.order=[...kept,...rest.filter(w=>!kept.includes(w))];
+}
+function relayout(){
+  normalizeLayout();
+  const focus=$("#focus"), rail=$("#rail");
+  const fe=widgetEl(layout.focus);
+  fe.classList.remove('tile'); fe.classList.add('focused'); focus.appendChild(fe);
+  layout.order.forEach(w=>{ const el=widgetEl(w); el.classList.remove('focused'); el.classList.add('tile'); rail.appendChild(el); });
+  document.body.classList.toggle('cal-focused', layout.focus==='calendar');
+  saveLayout();
+  renderCalendar();   // full vs mini depending on focus
+}
+function promote(w){
+  if(w===layout.focus) return;
+  const idx=layout.order.indexOf(w);
+  if(idx>=0) layout.order.splice(idx,1,layout.focus);   // old focus takes w's slot
+  layout.focus=w;
+  relayout(); pop(true);
+}
+/* tap = promote, press-drag = reorder. Pointer events ⇒ works on touch. */
+function attachWidgetGestures(el){
+  let sx=0,sy=0,pid,dragging=false;
+  el.addEventListener('pointerdown',ev=>{
+    if(el.classList.contains('focused')) return;     // big widget stays interactive
+    pid=ev.pointerId; sx=ev.clientX; sy=ev.clientY; dragging=false;
+    try{el.setPointerCapture(pid);}catch(e){}
+  });
+  el.addEventListener('pointermove',ev=>{
+    if(pid===undefined) return;
+    if(!dragging && (Math.abs(ev.clientY-sy)>8||Math.abs(ev.clientX-sx)>8)){ dragging=true; el.classList.add('dragging'); }
+  });
+  el.addEventListener('pointerup',ev=>{
+    if(pid===undefined) return;
+    try{el.releasePointerCapture(pid);}catch(e){} pid=undefined;
+    if(!dragging){ promote(el.dataset.w); return; }
+    el.classList.remove('dragging');
+    const w=el.dataset.w, tiles=[...$("#rail").children];
+    let target=layout.order.length-1;
+    for(let i=0;i<tiles.length;i++){ const r=tiles[i].getBoundingClientRect(); if(ev.clientY<r.top+r.height/2){ target=i; break; } }
+    const cur=layout.order.indexOf(w);
+    if(cur>=0){ layout.order.splice(cur,1); layout.order.splice(target,0,w); relayout(); }
+  });
+  el.addEventListener('pointercancel',()=>{ pid=undefined; dragging=false; el.classList.remove('dragging'); });
+}
+function buildDashboard(){
+  WIDGETS.forEach(w=>attachWidgetGestures(widgetEl(w)));
+  relayout();
+}
+/* compact month grid for the calendar tile (reuses the year-view mini style) */
+function renderCalMini(){
+  const el=$("#calMini"); if(!el) return;
+  const y=cursor.getFullYear(), mo=cursor.getMonth();
+  const first=new Date(y,mo,1).getDay(), days=new Date(y,mo+1,0).getDate();
+  let cells="";
+  for(let i=0;i<first;i++) cells+='<span class="md dim"></span>';
+  for(let d=1;d<=days;d++){
+    const has=eventsOn(y,mo,d).length>0, tdy=isSameDay(y,mo,d);
+    cells+=`<span class="md${has?' has':''}${tdy?' tdy':''}">${d}</span>`;
+  }
+  $("#calTitle").textContent=`${monthName(mo)} ${y}`;
+  el.innerHTML=`<div class="mini" style="cursor:default"><div class="mg">${cells}</div></div>`;
+}
+
 function renderCalendar(){
   viewMonth=cursor.getMonth(); viewYear=cursor.getFullYear();
+  // when the calendar is a small tile, show a compact mini-month instead
+  if(typeof layout==="object" && layout.focus && layout.focus!=="calendar"){
+    renderCalMini(); return;
+  }
   const grid=$("#grid");
   grid.className="grid"+(currentView==='month'?'':' view-'+currentView);
   $("#dow").style.display=(currentView==='month'||currentView==='week')?'grid':'none';
@@ -1550,7 +1678,8 @@ function checkReminders(){
    ============================================================ */
 applyTheme(themeKey);
 tick();setInterval(tick,1000);
-renderCalendar();renderAgenda();renderChores();renderFamily();
+renderAgenda();renderChores();renderFamily();renderCountdowns();
+buildDashboard();            // place widgets into focus/rail + render calendar
 updateSoundBtn();resetIdle();
 
 /* load the managed feed list + events, then poll for fresh data */
