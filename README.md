@@ -45,7 +45,13 @@ Reboot and the wall comes up fullscreen on its own.
 
 ## Adding real calendars
 
-Edit `data/feeds.json` (the QR-add flow is a later milestone). Each feed:
+**The easy way (QR):** on the wall, open 🎨 settings → **📲 Add a calendar**.
+A QR appears; scan it with your phone, paste the calendar's share link, set a
+name + color, tap **Add**. It lands in `feeds.json` and shows on the wall within
+seconds. The phone form only works while the 2-minute window is open and the
+one-time token matches, so it's safe even though it's reachable on the LAN.
+
+**The manual way:** edit `data/feeds.json` directly. Each feed:
 
 ```json
 { "id": "f_mom", "name": "Mom", "color": "#FF8FBE", "type": "ics",
@@ -61,6 +67,7 @@ After editing, `python fetcher.py` (or wait for the timer) refreshes the wall.
 
 Built: serve-over-HTTP, the one-feed pipeline, recurrence expansion,
 all-day/multi-day events, last-good cache + "synced" indicator, dead-feed
-resilience, and systemd/kiosk wiring (milestones 1–3 + 6).
-Not yet built: the QR-add flow and the settings-panel→feeds reconciliation
-(milestones 4–5), and the CalDAV add-on for private iCloud calendars (§8).
+resilience, the QR-add flow, and systemd/kiosk wiring (milestones 1–4 + 6).
+Not yet built: the settings-panel→feeds reconciliation (rename/recolor/remove
+existing feeds, milestone 5) and the CalDAV add-on for private iCloud
+calendars (§8).

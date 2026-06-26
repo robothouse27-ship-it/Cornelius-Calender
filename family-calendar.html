@@ -163,8 +163,8 @@
   .sleep-hint{position:absolute;bottom:34px;left:0;right:0;text-align:center;color:#fff;opacity:.7;font-weight:700;z-index:2;}
 
   /* ===================== MODAL ===================== */
-  #modal,#settings{position:fixed;inset:0;background:rgba(58,51,87,.35);backdrop-filter:blur(4px);z-index:120;display:none;align-items:center;justify-content:center;padding:20px;}
-  #modal.on,#settings.on{display:flex;animation:fade .25s ease;}
+  #modal,#settings,#qrmodal{position:fixed;inset:0;background:rgba(58,51,87,.35);backdrop-filter:blur(4px);z-index:120;display:none;align-items:center;justify-content:center;padding:20px;}
+  #modal.on,#settings.on,#qrmodal.on{display:flex;animation:fade .25s ease;}
   .sheet.tall{max-height:88vh;overflow-y:auto;}
   .themes{display:flex;gap:10px;flex-wrap:wrap;}
   .theme-chip{width:58px;height:42px;border-radius:14px;cursor:pointer;border:4px solid transparent;box-shadow:var(--shadow-soft);transition:.12s;}
@@ -300,9 +300,29 @@
       <div id="famEditor"></div>
       <button class="btn" id="addFam" style="margin-top:8px;font-size:14px;padding:9px 16px;">+ Add person</button>
     </div>
+    <div class="field">
+      <label>Calendars</label>
+      <button class="btn primary" id="addCal" style="font-size:15px;padding:12px 18px;">📲 Add a calendar</button>
+    </div>
     <div class="sheet-actions">
       <button class="btn primary" id="sDone">Done</button>
     </div>
+  </div>
+</div>
+
+<!-- QR ADD-CALENDAR MODAL -->
+<div id="qrmodal">
+  <div class="sheet">
+    <h2>Add a calendar 📲</h2>
+    <p style="color:var(--ink-soft);font-weight:700;margin:-6px 0 16px;font-size:14px">
+      Scan with your phone, then paste the calendar link.</p>
+    <div id="qrBody" style="text-align:center">
+      <img id="qrImg" alt="QR code" width="240" height="240"
+           style="border-radius:18px;background:#fff;box-shadow:var(--shadow-soft)">
+      <div id="qrUrl" style="margin-top:12px;font-weight:800;font-size:13px;color:var(--ink-soft);word-break:break-all"></div>
+      <div id="qrStatus" style="margin-top:10px;font-weight:800;color:var(--lav)">opening…</div>
+    </div>
+    <div class="sheet-actions"><button class="btn" id="qrClose">Close</button></div>
   </div>
 </div>
 
@@ -710,6 +730,51 @@ $("#addFam").addEventListener("click",()=>{
 $("#settingsBtn").addEventListener("click",()=>{pop();$("#settings").classList.add("on");renderThemePicker();renderFamEditor();});
 $("#sDone").addEventListener("click",()=>{pop();$("#settings").classList.remove("on");});
 $("#settings").addEventListener("click",e=>{if(e.target.id==="settings"){pop();$("#settings").classList.remove("on");}});
+
+/* ============================================================
+   QR ADD-CALENDAR FLOW
+   Wall opens a 2-min token window; phone scans the QR, pastes the
+   calendar link, and it lands in feeds.json with an immediate refetch.
+   ============================================================ */
+let qrPoll=null, qrToken=null;
+function fmtSecs(s){const m=Math.floor(s/60);return `${m}:${String(s%60).padStart(2,'0')}`;}
+async function openQrFlow(){
+  $("#qrmodal").classList.add("on");
+  $("#qrStatus").textContent="opening…"; $("#qrUrl").textContent=""; $("#qrImg").removeAttribute("src");
+  try{
+    const r=await fetch('/api/add-window/open',{method:'POST'});
+    const w=await r.json(); qrToken=w.token;
+    $("#qrImg").src='/api/qr?token='+w.token+'&_='+Date.now();
+    $("#qrUrl").textContent=w.url;
+    $("#qrStatus").textContent='waiting for your phone…';
+    clearInterval(qrPoll); qrPoll=setInterval(pollQr,1500);
+  }catch(e){
+    $("#qrStatus").textContent='⚠️ couldn’t start — is the box online?';
+  }
+}
+async function pollQr(){
+  if(!qrToken)return;
+  try{
+    const r=await fetch('/api/add-window/status?token='+qrToken+'&_='+Date.now());
+    const s=await r.json();
+    if(s.added){
+      clearInterval(qrPoll);
+      $("#qrStatus").innerHTML=`🎉 Added <b>${s.added.name}</b> — refreshing…`;
+      confettiBurst(); pop(true);
+      loadEvents();
+      setTimeout(closeQr, 2200);
+    }else if(!s.open){
+      clearInterval(qrPoll);
+      $("#qrStatus").textContent='⌛ window expired — tap “Add a calendar” again';
+    }else{
+      $("#qrStatus").textContent=`waiting for your phone…  (${fmtSecs(s.remaining)})`;
+    }
+  }catch(e){/* keep polling; transient */}
+}
+function closeQr(){clearInterval(qrPoll);qrToken=null;$("#qrmodal").classList.remove("on");}
+$("#addCal").addEventListener("click",()=>{pop();openQrFlow();});
+$("#qrClose").addEventListener("click",()=>{pop();closeQr();});
+$("#qrmodal").addEventListener("click",e=>{if(e.target.id==="qrmodal"){pop();closeQr();}});
 
 /* ============================================================
    GO
