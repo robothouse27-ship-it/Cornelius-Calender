@@ -951,39 +951,23 @@ function renderAgenda(){
 function renderChores(){
   const c=$("#chores"); c.innerHTML="";
   if(!chores.length){c.innerHTML=`<div class="empty" style="padding:14px 6px">No chores yet — add some in ⚙️ Settings.</div>`;return;}
-  const pool=chorePool();
-  // assign each chore to today's rotated person, grouped by that person
-  const groups=new Map();
+  // Plain checklist — not assigned to anyone for now. (Per-person rotation
+  // grouping still lives in choreAssignee/chorePool for when owners are set up.)
   chores.forEach(ch=>{
-    const who=choreAssignee(ch,pool);
-    const k=who.key||who.name;
-    if(!groups.has(k)) groups.set(k,{who,items:[]});
-    groups.get(k).items.push(ch);
-  });
-  // keep person order stable (pool order), unknowns last
-  [...groups.values()]
-    .sort((a,b)=>(pool.indexOf(a.who)+1||99)-(pool.indexOf(b.who)+1||99))
-    .forEach(g=>{
-      const head=document.createElement("div");head.className="chore-person";
-      const ava=g.who.avatar?`${g.who.avatar} `:"";
-      head.innerHTML=`<span class="who" style="background:${g.who.color}">${ava}${g.who.name}</span>`;
-      c.appendChild(head);
-      g.items.forEach(ch=>{
-        const done = choreDone[ch.id]===TODAY_KEY;
-        const row=document.createElement("div");row.className="chore"+(done?" done":"");
-        const icName=pickIcon(CHORE_ICONS,ch.label);
-        const ic=iconImg(icName,"cicon");
-        const label=icName ? ch.label.replace(/\s*[\p{Extended_Pictographic}️‍]+\s*$/u,'') : ch.label;
-        row.innerHTML=`<div class="check">✓</div>${ic}<div class="label">${label}</div>`;
-        row.querySelector(".check").addEventListener("click",e=>{
-          e.stopPropagation();
-          if(done) delete choreDone[ch.id]; else choreDone[ch.id]=TODAY_KEY;
-          saveChoreDone(); renderChores();
-          if(!done){ pop(true); confettiBurst(); }
-        });
-        c.appendChild(row);
-      });
+    const done = choreDone[ch.id]===TODAY_KEY;
+    const row=document.createElement("div");row.className="chore"+(done?" done":"");
+    const icName=pickIcon(CHORE_ICONS,ch.label);
+    const ic=iconImg(icName,"cicon");
+    const label=icName ? ch.label.replace(/\s*[\p{Extended_Pictographic}️‍]+\s*$/u,'') : ch.label;
+    row.innerHTML=`<div class="check">✓</div>${ic}<div class="label">${label}</div>`;
+    row.querySelector(".check").addEventListener("click",e=>{
+      e.stopPropagation();
+      if(done) delete choreDone[ch.id]; else choreDone[ch.id]=TODAY_KEY;
+      saveChoreDone(); renderChores();
+      if(!done){ pop(true); confettiBurst(); }
     });
+    c.appendChild(row);
+  });
   const earned=chores.filter(c=>choreDone[c.id]===TODAY_KEY).length;
   const star=document.createElement("div");
   star.style.cssText="text-align:center;font-weight:800;color:var(--butter);margin-top:6px;font-size:15px;";
