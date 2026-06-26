@@ -76,8 +76,12 @@ Three things quietly gate everything downstream:
       editor adds/renames/removes them. Pool = all people for now (a per-person
       "in rotation" toggle is a future refinement). Frontend-only; rotation +
       grouping logic verified.
-- [ ] **Countdown widgets** — "12 days till the trip." Independent, easy win,
-      slot in anytime here.
+- [x] **Countdown widgets** — "12 days till the trip." DONE 2026-06-26 — a
+      box-local list `{id, emoji, label, date}`; a compact rail panel shows
+      future countdowns soonest-first ("today!" on the day, a gentle pulse for
+      ≤7 days), auto-hides past/invalid ones and the whole panel when empty.
+      Settings editor adds/edits with a real date picker. Frontend-only; day
+      math + filtering verified.
 
 ## Phase 4 — Input channels
 *Now that the base is stable and tested.*

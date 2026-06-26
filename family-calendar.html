@@ -168,6 +168,17 @@
   .fam{display:flex;flex-wrap:wrap;gap:8px;}
   .pill{display:flex;align-items:center;gap:7px;background:#FBFAFF;border-radius:14px;padding:7px 12px;font-weight:800;font-size:13.5px;}
   .pill.free{opacity:.62;}
+
+  /* countdowns */
+  .panel h3 .hemoji{font-size:24px;line-height:1;flex:0 0 auto;}
+  .cd{display:flex;flex-direction:column;gap:8px;}
+  .cd-row{display:flex;align-items:center;gap:11px;background:#FBFAFF;border-radius:16px;padding:9px 12px;}
+  .cd-row .cd-emoji{font-size:22px;flex:none;line-height:1;}
+  .cd-row .cd-label{font-weight:800;font-size:14.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .cd-row .cd-num{font-weight:900;font-size:15px;color:#fff;background:var(--grad-hero);border-radius:11px;padding:4px 11px;flex:none;}
+  .cd-row.soon .cd-num{animation:cdpulse 1.6s ease-in-out infinite;}
+  .cd-row .cd-unit{font-weight:800;font-size:11px;opacity:.85;}
+  @keyframes cdpulse{0%,100%{transform:scale(1);}50%{transform:scale(1.07);}}
   .pill .who-next{margin-left:4px;font-weight:800;font-size:11.5px;color:#fff;background:var(--grad-hero);border-radius:9px;padding:2px 7px;}
   .pill .who-free{margin-left:4px;font-weight:800;font-size:11.5px;color:var(--ink-soft);}
   .arow .arow-ava{font-size:16px;flex:none;line-height:1;}
@@ -339,6 +350,10 @@
         <h3><img class="hicon" src="/icons/ui_family.png" alt="">Family</h3>
         <div class="fam" id="fam"></div>
       </div>
+      <div class="panel card" id="cdPanel" style="display:none;">
+        <h3><span class="hemoji">⏳</span>Countdowns</h3>
+        <div class="cd" id="countdowns"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -393,6 +408,11 @@
       <label>Chores <span style="font-weight:700;color:var(--ink-soft);font-size:12px;">· rotate daily through everyone</span></label>
       <div id="choreEditor"></div>
       <button class="btn" id="addChore" style="margin-top:8px;font-size:15px;padding:12px 18px;">🧹 Add a chore</button>
+    </div>
+    <div class="field">
+      <label>Countdowns</label>
+      <div id="cdEditor"></div>
+      <button class="btn" id="addCountdown" style="margin-top:8px;font-size:15px;padding:12px 18px;">⏳ Add a countdown</button>
     </div>
     <div class="field">
       <label>Calendars &amp; colors</label>
@@ -658,6 +678,43 @@ function choreAssignee(ch, pool){
   pool = pool || chorePool();
   if(!pool.length) return {name:"—",color:"#A98CFF"};
   return pool[(((ch.seed||0)+dayNumber())%pool.length+pool.length)%pool.length];
+}
+
+/* ============================================================
+   COUNTDOWNS  — "12 days till the trip". Box-local, independent
+   of feeds/people. {id, emoji, label, date:'YYYY-MM-DD'}.
+   ============================================================ */
+let countdowns = (store.get('countdowns', null) || []).map(cd=>({
+  id: cd.id || ('cd_'+Math.random().toString(36).slice(2,8)),
+  emoji: cd.emoji || '🎉',
+  label: cd.label || 'Countdown',
+  date: cd.date || TODAY_KEY,
+}));
+function saveCountdowns(){ store.set('countdowns', countdowns); }
+function daysUntil(dateStr){
+  const [y,m,d]=String(dateStr).split('-').map(Number);
+  if(!y||!m||!d) return null;
+  const n=new Date();
+  return Math.round((Date.UTC(y,m-1,d)-Date.UTC(n.getFullYear(),n.getMonth(),n.getDate()))/86400000);
+}
+function renderCountdowns(){
+  const panel=$("#cdPanel"), wrap=$("#countdowns");
+  const live=countdowns
+    .map(cd=>({cd,days:daysUntil(cd.date)}))
+    .filter(x=>x.days!==null && x.days>=0)        // hide past ones from the wall
+    .sort((a,b)=>a.days-b.days);
+  if(!live.length){ panel.style.display="none"; wrap.innerHTML=""; return; }
+  panel.style.display=""; wrap.innerHTML="";
+  live.forEach(({cd,days})=>{
+    const row=document.createElement("div");
+    row.className="cd-row"+(days<=7?" soon":"");
+    const num = days===0 ? "today!"
+              : `${days}<span class="cd-unit"> ${days===1?"day":"days"}</span>`;
+    row.innerHTML=`<span class="cd-emoji">${cd.emoji}</span>
+      <span class="cd-label">${cd.label}</span>
+      <span class="cd-num">${num}</span>`;
+    wrap.appendChild(row);
+  });
 }
 
 /* ============================================================
@@ -1124,7 +1181,7 @@ $("#soundBtn").addEventListener("click",()=>{soundOn=!soundOn;store.set('sound',
    ============================================================ */
 function liveRefresh(){
   if(pickFam>=FAMILY.length)pickFam=0;
-  renderCalendar();renderAgenda();renderChores();renderFamily();
+  renderCalendar();renderAgenda();renderChores();renderFamily();renderCountdowns();
   if($("#modal").classList.contains("on"))buildSwatches();
 }
 function renderThemePicker(){
@@ -1281,7 +1338,39 @@ function addChore(){
 }
 $("#addChore").addEventListener("click",()=>{pop();addChore();});
 
-$("#settingsBtn").addEventListener("click",()=>{pop();$("#settings").classList.add("on");renderThemePicker();renderChoreEditor();loadFeeds().then(()=>{renderPeopleEditor();renderFeedEditor();});});
+/* Countdown editor: emoji + label + a real date picker, inline. */
+function renderCountdownEditor(){
+  const wrap=$("#cdEditor");wrap.innerHTML="";
+  if(!countdowns.length){
+    wrap.innerHTML=`<div class="empty" style="padding:8px 4px">No countdowns yet — add a trip, birthday, or holiday to count down to.</div>`;
+    return;
+  }
+  countdowns.forEach((cd,i)=>{
+    const row=document.createElement("div");row.className="fam-edit";
+    row.innerHTML=`<input class="ava" type="text" value="${cd.emoji}" maxlength="4" title="Emoji">
+      <input type="text" value="${cd.label.replace(/"/g,'&quot;')}" maxlength="30">
+      <input type="date" value="${cd.date}" style="flex:none;width:138px;border:2px solid var(--line);border-radius:13px;padding:9px 8px;font-family:'Nunito';font-weight:700;font-size:14px;color:var(--ink);background:#FBFAFF;">
+      <button class="del" title="Remove"><img class="ctrlIcon" src="/icons/ui_delete.png" alt="Remove"></button>`;
+    const emoji=row.querySelector("input.ava");
+    const label=row.querySelector('input[type=text]:not(.ava)');
+    const date=row.querySelector('input[type=date]');
+    const del=row.querySelector('.del');
+    emoji.addEventListener("change",()=>{ cd.emoji=emoji.value.trim()||cd.emoji; saveCountdowns(); renderCountdowns(); });
+    label.addEventListener("change",()=>{ cd.label=label.value.trim()||cd.label; saveCountdowns(); renderCountdowns(); });
+    date.addEventListener("change",()=>{ if(date.value){ cd.date=date.value; saveCountdowns(); renderCountdowns(); } });
+    del.addEventListener("click",()=>{ pop(); countdowns.splice(i,1); saveCountdowns(); renderCountdownEditor(); renderCountdowns(); });
+    wrap.appendChild(row);
+  });
+}
+function addCountdown(){
+  const d=new Date(); d.setDate(d.getDate()+7);
+  const iso=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  countdowns.push({id:"cd_"+Math.random().toString(36).slice(2,8),emoji:"🎉",label:"New countdown",date:iso});
+  saveCountdowns(); renderCountdownEditor(); renderCountdowns(); pop(true);
+}
+$("#addCountdown").addEventListener("click",()=>{pop();addCountdown();});
+
+$("#settingsBtn").addEventListener("click",()=>{pop();$("#settings").classList.add("on");renderThemePicker();renderChoreEditor();renderCountdownEditor();loadFeeds().then(()=>{renderPeopleEditor();renderFeedEditor();});});
 $("#sDone").addEventListener("click",()=>{pop();$("#settings").classList.remove("on");});
 $("#settings").addEventListener("click",e=>{if(e.target.id==="settings"){pop();$("#settings").classList.remove("on");}});
 
