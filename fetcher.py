@@ -89,12 +89,12 @@ def parse_feed(text, feed, win_start, win_end):
         raw_start = dtstart.dt
         all_day = isinstance(raw_start, date) and not isinstance(raw_start, datetime)
         start = to_local_aware(raw_start)
-        if dtend is not None:
-            end = to_local_aware(dtend.dt)
-        elif all_day:
-            end = start + timedelta(days=1)
-        else:
-            end = start + timedelta(hours=1)
+        end = to_local_aware(dtend.dt) if dtend is not None else None
+        # No end, or a zero-length timed event (recurring_ical_events
+        # synthesizes DTEND==DTSTART when a feed omits it): apply a sane
+        # default span so nothing renders as an instant on the wall.
+        if end is None or (not all_day and end <= start):
+            end = start + (timedelta(days=1) if all_day else timedelta(hours=1))
         out.append({
             "id": "evt_" + uuid.uuid4().hex[:12],
             "feed_id": feed["id"],

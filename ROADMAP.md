@@ -32,8 +32,11 @@ Three things quietly gate everything downstream:
 ## Phase 1 — Foundation
 *Cheap, boring, makes everything after it safe. Do second.*
 
-- [ ] **Smoke/test harness** around `fetcher.py` recurrence + merge + timezone
-      logic. Catches the highest-risk bugs in the project.
+- [x] **Smoke/test harness** around `fetcher.py` recurrence + merge + timezone
+      logic. Catches the highest-risk bugs in the project. DONE 2026-06-26 —
+      `tests/` (17 tests, `.venv/bin/pytest`). Caught + fixed a real bug:
+      timed events with no DTEND rendered zero-duration (the 1h default never
+      fired because `recurring_ical_events` synthesizes `DTEND==DTSTART`).
 - [ ] **Health/status endpoint** (`/api/health` → last-good-sync, per-feed
       liveness). Feeds Phase 3's status UI.
 
