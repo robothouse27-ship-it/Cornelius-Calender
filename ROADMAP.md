@@ -24,9 +24,10 @@ Three things quietly gate everything downstream:
 - [ ] **Rotate the leaked iCloud URL** — pending security item; the scrub from
       `feeds.json` is done, but the actual Benji calendar URL needs rotating on
       iCloud's side (old one may be cached/indexed).
-- [ ] **Verify the wall is running latest** — confirm the self-updater pulled
-      the recent stickers / sync-now / tab-reorder commits. Don't build on a
-      silently-stale box. (Wall: `ssh calender@192.168.1.238`.)
+- [x] **Verify the wall is running latest** — DONE 2026-06-26. Wall at
+      `/home/calender/familycal`, on `main` @ `6b9cbeb`, in sync with origin
+      (0/0); `familycal-web.service` + `familycal-update.timer` both active. All
+      published feature work is live. (Wall: `ssh calender@192.168.1.238`.)
 
 ## Phase 1 — Foundation
 *Cheap, boring, makes everything after it safe. Do second.*
