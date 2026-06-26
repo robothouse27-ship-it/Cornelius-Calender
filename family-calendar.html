@@ -164,9 +164,13 @@
   .arow .what{font-weight:700;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .empty{color:var(--ink-soft);font-weight:700;text-align:center;padding:18px 6px;font-size:14px;}
 
-  /* family legend */
+  /* "who's home today" strip */
   .fam{display:flex;flex-wrap:wrap;gap:8px;}
   .pill{display:flex;align-items:center;gap:7px;background:#FBFAFF;border-radius:14px;padding:7px 12px;font-weight:800;font-size:13.5px;}
+  .pill.free{opacity:.62;}
+  .pill .who-next{margin-left:4px;font-weight:800;font-size:11.5px;color:#fff;background:var(--grad-hero);border-radius:9px;padding:2px 7px;}
+  .pill .who-free{margin-left:4px;font-weight:800;font-size:11.5px;color:var(--ink-soft);}
+  .arow .arow-ava{font-size:16px;flex:none;line-height:1;}
 
   /* chores */
   .chore{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:16px;background:#FBFAFF;margin-bottom:9px;transition:background .2s;}
@@ -503,13 +507,21 @@ function fmtTime(iso){
   const h12=h%12||12; return `${h12}:${pad(d.getMinutes())} ${ap}`;
 }
 function shapeImported(doc){
-  const colorOf={}; (doc.feeds||[]).forEach(f=>colorOf[f.id]=f);
+  const feedById={}; (doc.feeds||[]).forEach(f=>feedById[f.id]=f);
+  const personById={}; (doc.people||[]).forEach(p=>personById[p.id]=p);
   return (doc.events||[]).map(e=>{
-    const d=new Date(e.start); const f=colorOf[e.feed_id]||{};
+    const d=new Date(e.start); const f=feedById[e.feed_id]||{};
+    const p = f.owner_id ? personById[f.owner_id] : null;   // owner via the feed
     return {
       date: dateKey(d.getFullYear(),d.getMonth(),d.getDate()),
       time: e.all_day ? 'All day' : fmtTime(e.start),
-      title: e.title, color: f.color||'#A98CFF', feedName: f.name||'Calendar', local:false
+      title: e.title,
+      color: (p&&p.color) || f.color || '#A98CFF',           // owner color wins
+      feedName: f.name||'Calendar',
+      whoKey: p ? p.id : ('feed:'+(e.feed_id||'?')),         // groups lanes/strip
+      whoName: p ? p.name : (f.name||'Calendar'),
+      avatar: p ? (p.avatar||'') : '',
+      local:false
     };
   });
 }
@@ -520,9 +532,9 @@ let PEOPLE = [];      // owner registry {id,name,color,avatar} (Phase 2)
 /* The legend = people if any are defined, else the feed list, else defaults.
    Owners are the "who"; feeds fall back to acting as people when none exist. */
 function familyFromFeeds(){
-  if(PEOPLE.length) return PEOPLE.map(p=>({name:p.name,color:p.color,avatar:p.avatar}));
-  return FEED_LIST.length ? FEED_LIST.map(f=>({name:f.name,color:f.color}))
-                          : (FEEDS.length ? FEEDS : FAMILY_DEFAULT);
+  if(PEOPLE.length) return PEOPLE.map(p=>({key:p.id,name:p.name,color:p.color,avatar:p.avatar}));
+  if(FEED_LIST.length) return FEED_LIST.map(f=>({key:'feed:'+f.id,name:f.name,color:f.color}));
+  return (FEEDS.length ? FEEDS : FAMILY_DEFAULT).map((p,i)=>({key:'fam:'+i,...p}));
 }
 
 /* Rebuild the in-memory list from a parsed events.json doc + local adds. */
@@ -821,8 +833,9 @@ function renderAgenda(){
       badge=`<span class="badge">${countdownText(mins)}</span>`;
     }
     const ic=iconImg(pickIcon(EVENT_ICONS,e.title),"eicon");
+    const ava=e.avatar?`<span class="arow-ava" title="${e.whoName||''}">${e.avatar}</span>`:"";
     r.innerHTML=`<span class="dot" style="background:${e.color||famColor(e.fam)}"></span>
-      <span class="when">${e.time}</span>${ic}<span class="what">${e.title}</span>${badge}`;
+      <span class="when">${e.time}</span>${ava}${ic}<span class="what">${e.title}</span>${badge}`;
     a.appendChild(r);
   });
 }
@@ -853,12 +866,25 @@ function renderChores(){
   c.appendChild(star);
 }
 
+/* "Who's home today" strip: each person + their next event today, or "free".
+   Groups today's events by owner (whoKey) — directly on the Phase 2 model. */
 function renderFamily(){
   const f=$("#fam"); f.innerHTML="";
+  const byWho={};
+  events.filter(e=>e.date===TODAY_KEY).forEach(e=>{
+    if(!e.whoKey) return;                                   // box-local adds: skip
+    (byWho[e.whoKey]=byWho[e.whoKey]||[]).push(e);
+  });
   FAMILY.forEach(p=>{
-    const el=document.createElement("div");el.className="pill";
+    const mine=(byWho[p.key]||[]).sort((a,b)=>minsOf(a.time)-minsOf(b.time));
+    const el=document.createElement("div");
+    el.className="pill"+(mine.length?"":" free");
     const ava = p.avatar ? `${p.avatar} ` : "";
-    el.innerHTML=`<span class="dot" style="background:${p.color}"></span>${ava}${p.name}`;
+    const tail = mine.length
+      ? `<span class="who-next">${mine[0].time==='All day'?'all day':mine[0].time}${mine.length>1?` +${mine.length-1}`:''}</span>`
+      : `<span class="who-free">free</span>`;
+    el.innerHTML=`<span class="dot" style="background:${p.color}"></span>${ava}${p.name}${tail}`;
+    el.title = mine.length ? mine.map(e=>`${e.time} · ${e.title}`).join("\n") : "No events today";
     f.appendChild(el);
   });
 }

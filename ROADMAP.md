@@ -61,8 +61,12 @@ Three things quietly gate everything downstream:
 
 ## Phase 3 — Features that ride on the keystone
 
-- [ ] **Per-person agenda lanes / "who's home today"** strip — needs the person
-      model.
+- [x] **Per-person agenda lanes / "who's home today"** strip — needs the person
+      model. DONE 2026-06-26 — events now resolve their owner via
+      `feed.owner_id → person` in `shapeImported` (owner color/avatar win); the
+      Family panel became a "who's today" strip (each person → their next event
+      + count today, or "free"), and agenda rows show the owner's avatar.
+      Frontend-only (no backend change); owner-grouping logic verified.
 - [ ] **Recurring chore rotation** — auto-assign chores by person/day; needs the
       person model.
 - [ ] **Countdown widgets** — "12 days till the trip." Independent, easy win,
