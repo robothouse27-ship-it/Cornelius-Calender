@@ -239,8 +239,8 @@
   .sleep-hint{position:absolute;bottom:34px;left:0;right:0;text-align:center;color:#fff;opacity:.7;font-weight:700;z-index:2;}
 
   /* ===================== MODAL ===================== */
-  #modal,#settings,#qrmodal,#feedmodal{position:fixed;inset:0;background:rgba(58,51,87,.35);backdrop-filter:blur(4px);z-index:120;display:none;align-items:center;justify-content:center;padding:20px;}
-  #modal.on,#settings.on,#qrmodal.on,#feedmodal.on{display:flex;animation:fade .25s ease;}
+  #modal,#settings,#qrmodal,#feedmodal,#chqrmodal{position:fixed;inset:0;background:rgba(58,51,87,.35);backdrop-filter:blur(4px);z-index:120;display:none;align-items:center;justify-content:center;padding:20px;}
+  #modal.on,#settings.on,#qrmodal.on,#feedmodal.on,#chqrmodal.on{display:flex;animation:fade .25s ease;}
   .sheet.tall{max-height:88vh;overflow-y:auto;}
   .themes{display:flex;gap:10px;flex-wrap:wrap;}
   .theme-chip{width:58px;height:42px;border-radius:14px;cursor:pointer;border:4px solid transparent;box-shadow:var(--shadow-soft);transition:.12s;}
@@ -408,6 +408,7 @@
       <label>Chores <span style="font-weight:700;color:var(--ink-soft);font-size:12px;">· rotate daily through everyone</span></label>
       <div id="choreEditor"></div>
       <button class="btn" id="addChore" style="margin-top:8px;font-size:15px;padding:12px 18px;">🧹 Add a chore</button>
+      <button class="btn primary" id="addChorePhone" style="margin-top:8px;font-size:15px;padding:12px 18px;">📲 Add a chore by phone</button>
     </div>
     <div class="field">
       <label>Countdowns</label>
@@ -439,6 +440,22 @@
       <div id="qrStatus" style="margin-top:10px;font-weight:800;color:var(--lav)">opening…</div>
     </div>
     <div class="sheet-actions"><button class="btn" id="qrClose">Close</button></div>
+  </div>
+</div>
+
+<!-- QR ADD-CHORE MODAL -->
+<div id="chqrmodal">
+  <div class="sheet">
+    <h2>Add a chore 📲</h2>
+    <p style="color:var(--ink-soft);font-weight:700;margin:-6px 0 16px;font-size:14px">
+      Scan with your phone, then type a chore for the chart.</p>
+    <div style="text-align:center">
+      <img id="chqrImg" alt="QR code" width="240" height="240"
+           style="border-radius:18px;background:#fff;box-shadow:var(--shadow-soft)">
+      <div id="chqrUrl" style="margin-top:12px;font-weight:800;font-size:13px;color:var(--ink-soft);word-break:break-all"></div>
+      <div id="chqrStatus" style="margin-top:10px;font-weight:800;color:var(--lav)">opening…</div>
+    </div>
+    <div class="sheet-actions"><button class="btn" id="chqrClose">Close</button></div>
   </div>
 </div>
 
@@ -646,22 +663,20 @@ async function syncNow(){
 /* ============================================================
    CHORES
    ============================================================ */
-const DEFAULT_CHORES = [
-  {label:"Feed the pig 🐷", seed:0},
-  {label:"Tidy play room",  seed:1},
-  {label:"Take out trash",  seed:2},
-  {label:"Water plants 🌱", seed:3},
-];
-/* Normalize whatever's stored to the rotation shape {label, seed, doneDate}.
-   Migrates the old {label, who, done}: the fixed `who` becomes the rotation
-   seed, and a stale `done` flag is dropped (done is now per-day). */
-let chores = (store.get('chores', null) || DEFAULT_CHORES).map((ch,i)=>({
-  label: ch.label,
-  seed: (typeof ch.seed==='number') ? ch.seed
-        : (typeof ch.who==='number') ? ch.who : i,
-  doneDate: ch.doneDate || null,
-}));
-function saveChores(){ store.set('chores', chores); }
+/* Chore definitions live on the box (data/chores.json) so they're shared
+   across every device and can be added from a phone. "Done" stays box-local
+   and per-day: a {choreId → 'YYYY-MM-DD'} map that auto-resets at midnight. */
+let chores = [];                              // {id,label,seed} from /api/chores
+let choreDone = store.get('choreDone', {});
+function saveChoreDone(){ store.set('choreDone', choreDone); }
+async function loadChores(){
+  try{
+    const r=await fetch('/api/chores?_='+Date.now(),{cache:'no-store'});
+    const j=await r.json();
+    chores=(j.chores||[]).map((c,i)=>({id:c.id,label:c.label,
+      seed:(typeof c.seed==='number'?c.seed:i)}));
+  }catch(e){/* offline → keep whatever we had */}
+}
 
 /* Daily rotation: assignee = pool[(seed + whole-days-since-epoch) % n].
    Pool is the people registry, falling back to the legacy family list. */
@@ -954,7 +969,7 @@ function renderChores(){
       head.innerHTML=`<span class="who" style="background:${g.who.color}">${ava}${g.who.name}</span>`;
       c.appendChild(head);
       g.items.forEach(ch=>{
-        const done = ch.doneDate===TODAY_KEY;
+        const done = choreDone[ch.id]===TODAY_KEY;
         const row=document.createElement("div");row.className="chore"+(done?" done":"");
         const icName=pickIcon(CHORE_ICONS,ch.label);
         const ic=iconImg(icName,"cicon");
@@ -962,13 +977,14 @@ function renderChores(){
         row.innerHTML=`<div class="check">✓</div>${ic}<div class="label">${label}</div>`;
         row.querySelector(".check").addEventListener("click",e=>{
           e.stopPropagation();
-          ch.doneDate = done ? null : TODAY_KEY; saveChores(); renderChores();
+          if(done) delete choreDone[ch.id]; else choreDone[ch.id]=TODAY_KEY;
+          saveChoreDone(); renderChores();
           if(!done){ pop(true); confettiBurst(); }
         });
         c.appendChild(row);
       });
     });
-  const earned=chores.filter(c=>c.doneDate===TODAY_KEY).length;
+  const earned=chores.filter(c=>choreDone[c.id]===TODAY_KEY).length;
   const star=document.createElement("div");
   star.style.cssText="text-align:center;font-weight:800;color:var(--butter);margin-top:6px;font-size:15px;";
   star.innerHTML=`⭐ ${earned} / ${chores.length} done today`;
@@ -1321,22 +1337,35 @@ function renderChoreEditor(){
       <button class="del" title="Remove"><img class="ctrlIcon" src="/icons/ui_delete.png" alt="Remove"></button>`;
     const name=row.querySelector('input[type=text]');
     const del=row.querySelector('.del');
-    name.addEventListener("change",()=>{ ch.label=name.value.trim()||ch.label; saveChores(); renderChores(); });
+    name.addEventListener("change",()=>{
+      ch.label=name.value.trim()||ch.label; renderChores();
+      postJSON('/api/chores/update',{id:ch.id,label:ch.label});
+    });
     del.addEventListener("click",()=>{
       pop();
-      chores.splice(i,1); saveChores(); renderChoreEditor(); renderChores();
+      chores.splice(i,1); renderChoreEditor(); renderChores();
+      postJSON('/api/chores/delete',{id:ch.id});
     });
     wrap.appendChild(row);
   });
 }
-function addChore(){
+function postJSON(url,body){
+  return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(body)}).catch(()=>{});
+}
+async function addChore(){
   const label=(prompt("New chore? (e.g. Take out trash)")||"").trim();
   if(!label) return;
-  // seed = current length so a new chore lands on the next person, staggered
-  chores.push({label, seed:chores.length, doneDate:null});
-  saveChores(); renderChoreEditor(); renderChores(); pop(true);
+  try{
+    const r=await fetch('/api/chores/add',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({label})});
+    const j=await r.json();
+    if(j.ok){ chores.push({id:j.chore.id,label:j.chore.label,seed:j.chore.seed});
+      renderChoreEditor(); renderChores(); pop(true); }
+  }catch(e){/* offline */}
 }
 $("#addChore").addEventListener("click",()=>{pop();addChore();});
+$("#addChorePhone").addEventListener("click",()=>{pop();openChoreQr();});
 
 /* Countdown editor: emoji + label + a real date picker, inline. */
 function renderCountdownEditor(){
@@ -1370,7 +1399,7 @@ function addCountdown(){
 }
 $("#addCountdown").addEventListener("click",()=>{pop();addCountdown();});
 
-$("#settingsBtn").addEventListener("click",()=>{pop();$("#settings").classList.add("on");renderThemePicker();renderChoreEditor();renderCountdownEditor();loadFeeds().then(()=>{renderPeopleEditor();renderFeedEditor();});});
+$("#settingsBtn").addEventListener("click",()=>{pop();$("#settings").classList.add("on");renderThemePicker();renderCountdownEditor();loadChores().then(()=>{renderChoreEditor();renderChores();});loadFeeds().then(()=>{renderPeopleEditor();renderFeedEditor();});});
 $("#sDone").addEventListener("click",()=>{pop();$("#settings").classList.remove("on");});
 $("#settings").addEventListener("click",e=>{if(e.target.id==="settings"){pop();$("#settings").classList.remove("on");}});
 
@@ -1418,6 +1447,45 @@ function closeQr(){clearInterval(qrPoll);qrToken=null;$("#qrmodal").classList.re
 $("#addCal").addEventListener("click",()=>{pop();openQrFlow();});
 $("#qrClose").addEventListener("click",()=>{pop();closeQr();});
 $("#qrmodal").addEventListener("click",e=>{if(e.target.id==="qrmodal"){pop();closeQr();}});
+
+/* Same flow for chores: open a 2-min window, show the QR, poll for the add. */
+let chqrPoll=null, chqrToken=null;
+async function openChoreQr(){
+  $("#chqrmodal").classList.add("on");
+  $("#chqrStatus").textContent="opening…"; $("#chqrUrl").textContent=""; $("#chqrImg").removeAttribute("src");
+  try{
+    const r=await fetch('/api/chore-window/open',{method:'POST'});
+    const w=await r.json(); chqrToken=w.token;
+    $("#chqrImg").src='/api/chore-qr?token='+w.token+'&_='+Date.now();
+    $("#chqrUrl").textContent=w.url;
+    $("#chqrStatus").textContent='waiting for your phone…';
+    clearInterval(chqrPoll); chqrPoll=setInterval(pollChoreQr,1500);
+  }catch(e){
+    $("#chqrStatus").innerHTML='<img class="inlineWarn" src="/icons/ui_warn.png" alt=""> couldn’t start — is the box online?';
+  }
+}
+async function pollChoreQr(){
+  if(!chqrToken)return;
+  try{
+    const r=await fetch('/api/chore-window/status?token='+chqrToken+'&_='+Date.now());
+    const s=await r.json();
+    if(s.added){
+      clearInterval(chqrPoll);
+      $("#chqrStatus").innerHTML=`🎉 Added <b>${s.added.label}</b> — updating…`;
+      confettiBurst(); pop(true);
+      loadChores().then(()=>{ renderChoreEditor(); renderChores(); });
+      setTimeout(closeChoreQr, 2200);
+    }else if(!s.open){
+      clearInterval(chqrPoll);
+      $("#chqrStatus").textContent='⌛ window expired — tap “Add a chore by phone” again';
+    }else{
+      $("#chqrStatus").textContent=`waiting for your phone…  (${fmtSecs(s.remaining)})`;
+    }
+  }catch(e){/* keep polling; transient */}
+}
+function closeChoreQr(){clearInterval(chqrPoll);chqrToken=null;$("#chqrmodal").classList.remove("on");}
+$("#chqrClose").addEventListener("click",()=>{pop();closeChoreQr();});
+$("#chqrmodal").addEventListener("click",e=>{if(e.target.id==="chqrmodal"){pop();closeChoreQr();}});
 
 /* ============================================================
    SUBSCRIBE / EXPORT FLOW  (wall → phones)
@@ -1505,6 +1573,10 @@ updateSoundBtn();resetIdle();
 loadFeeds().then(loadEvents);
 setInterval(loadEvents, 3*60*1000);   // re-fetch events.json every 3 min
 setInterval(updateSync, 30*1000);     // keep the "N min ago" label honest
+
+/* load the chore chart from the box, then keep it fresh (phone adds show up) */
+loadChores().then(renderChores);
+setInterval(()=>{ loadChores().then(renderChores); }, 3*60*1000);
 
 loadWeather();
 setInterval(loadWeather, 15*60*1000); // refresh weather every 15 min

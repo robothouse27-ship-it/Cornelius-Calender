@@ -19,3 +19,4 @@ data/feeds.local.json
 # raw spec drop (zip + unpacked dupes); the canonical copies live as docs-*.md
 /files/
 /files.zip
+data/chores.json

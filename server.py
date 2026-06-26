@@ -35,6 +35,7 @@ DATA = HERE / "data"
 EVENTS_PATH = DATA / "events.json"
 FEEDS_PATH = DATA / "feeds.json"
 EXPORT_PATH = DATA / "export.json"   # persistent secret token for the family feed
+CHORES_PATH = DATA / "chores.json"   # box-side chore chart (rotates daily on the wall)
 PHOTOS_DIR = HERE / "photos"        # drop family photos here for sleep mode
 ICONS_DIR = HERE / "icons"          # pastel sticker icons (weather/chores/events)
 INDEX = HERE / "family-calendar.html"
@@ -86,6 +87,38 @@ def save_feeds(doc):
 
 def window_open():
     return add_window["token"] is not None and time.time() < add_window["expires_at"]
+
+
+# default chart, seeded only when chores.json doesn't exist yet
+DEFAULT_CHORES = [
+    {"id": "c_seed1", "label": "Feed the pig 🐷", "seed": 0},
+    {"id": "c_seed2", "label": "Tidy play room", "seed": 1},
+    {"id": "c_seed3", "label": "Take out trash", "seed": 2},
+    {"id": "c_seed4", "label": "Water plants 🌱", "seed": 3},
+]
+
+
+def load_chores():
+    if CHORES_PATH.exists():
+        try:
+            return json.loads(CHORES_PATH.read_text())
+        except (ValueError, OSError):
+            pass
+    return {"chores": [dict(c) for c in DEFAULT_CHORES]}
+
+
+def save_chores(doc):
+    fd, tmp = tempfile.mkstemp(dir=str(DATA), suffix=".tmp")
+    with os.fdopen(fd, "w") as fh:
+        json.dump(doc, fh, indent=2)
+    os.replace(tmp, CHORES_PATH)
+
+
+def new_chore(label, existing):
+    """A chore dict with a staggered seed so it lands on the next person."""
+    return {"id": "c_" + uuid.uuid4().hex[:6],
+            "label": str(label).strip()[:40],
+            "seed": len(existing)}
 
 
 def trigger_fetch():
@@ -278,6 +311,54 @@ def health():
     })
 
 
+# --------------------------------------------------------------------------- #
+# chores (box-side chart; the wall does the daily rotation + per-day "done")
+# --------------------------------------------------------------------------- #
+@app.route("/api/chores")
+def chores_list():
+    return jsonify(load_chores())
+
+
+@app.route("/api/chores/add", methods=["POST"])
+def chores_add():
+    body = request.get_json(force=True, silent=True) or {}
+    label = str(body.get("label", "")).strip()
+    if not label:
+        return jsonify({"ok": False, "error": "label required"}), 400
+    doc = load_chores()
+    chore = new_chore(label, doc.get("chores", []))
+    doc.setdefault("chores", []).append(chore)
+    save_chores(doc)
+    return jsonify({"ok": True, "chore": chore})
+
+
+@app.route("/api/chores/update", methods=["POST"])
+def chores_update():
+    body = request.get_json(force=True, silent=True) or {}
+    cid = body.get("id")
+    doc = load_chores()
+    for ch in doc.get("chores", []):
+        if ch.get("id") == cid:
+            if "label" in body:
+                ch["label"] = str(body["label"]).strip()[:40] or ch["label"]
+            save_chores(doc)
+            return jsonify({"ok": True, "chore": ch})
+    return jsonify({"ok": False, "error": "not found"}), 404
+
+
+@app.route("/api/chores/delete", methods=["POST"])
+def chores_delete():
+    body = request.get_json(force=True, silent=True) or {}
+    cid = body.get("id")
+    doc = load_chores()
+    before = len(doc.get("chores", []))
+    doc["chores"] = [c for c in doc.get("chores", []) if c.get("id") != cid]
+    if len(doc["chores"]) == before:
+        return jsonify({"ok": False, "error": "not found"}), 404
+    save_chores(doc)
+    return jsonify({"ok": True})
+
+
 @app.route("/api/feeds/update", methods=["POST"])
 def feeds_update():
     """Rename / recolor / enable-disable an existing feed (milestone 5)."""
@@ -395,12 +476,84 @@ def add_submit():
 
 
 # --------------------------------------------------------------------------- #
+# QR-add flow for CHORES (mirrors the calendar flow: tap the wall to open a
+# one-time 2-min window, scan, type a chore, it lands on the chart)
+# --------------------------------------------------------------------------- #
+chore_window = {"token": None, "expires_at": 0.0, "added": None}
+
+
+def chore_window_open():
+    return (chore_window["token"] is not None
+            and time.time() < chore_window["expires_at"])
+
+
+@app.route("/api/chore-window/open", methods=["POST"])
+def chore_window_open_route():
+    token = uuid.uuid4().hex
+    chore_window.update(token=token, expires_at=time.time() + WINDOW_SECS, added=None)
+    url = f"http://{lan_ip()}:{PORT}/chore?token={token}"
+    return jsonify({"token": token, "url": url, "expires_in": WINDOW_SECS})
+
+
+@app.route("/api/chore-window/status")
+def chore_window_status():
+    token = request.args.get("token", "")
+    if token != chore_window["token"]:
+        return jsonify({"open": False, "added": None, "remaining": 0})
+    remaining = max(0, int(chore_window["expires_at"] - time.time()))
+    return jsonify({"open": remaining > 0, "added": chore_window["added"],
+                    "remaining": remaining})
+
+
+@app.route("/api/chore-qr")
+def chore_qr():
+    token = request.args.get("token", "")
+    if token != chore_window["token"]:
+        abort(404)
+    url = f"http://{lan_ip()}:{PORT}/chore?token={token}"
+    img = qrcode.make(url)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return send_file(buf, mimetype="image/png")
+
+
+@app.route("/chore", methods=["GET"])
+def chore_page():
+    token = request.args.get("token", "")
+    ok = token == chore_window["token"] and chore_window_open()
+    return Response(render_chore_page(token, ok), mimetype="text/html")
+
+
+@app.route("/chore", methods=["POST"])
+def chore_submit():
+    token = request.form.get("token", "")
+    if token != chore_window["token"] or not chore_window_open():
+        return Response(render_result_page(False, "This add window has closed. "
+                        "Tap “Add chore by phone” on the wall again."),
+                        mimetype="text/html", status=403)
+    label = request.form.get("label", "").strip()
+    if not label:
+        return Response(render_result_page(False, "Please type a chore name."),
+                        mimetype="text/html", status=400)
+    doc = load_chores()
+    chore = new_chore(label, doc.get("chores", []))
+    doc.setdefault("chores", []).append(chore)
+    save_chores(doc)
+    chore_window["added"] = {"label": chore["label"]}
+    chore_window["expires_at"] = 0
+    return Response(render_result_page(True, f"“{chore['label']}” was added to the "
+                    "chore chart. It'll show on the wall in a few seconds."),
+                    mimetype="text/html")
+
+
+# --------------------------------------------------------------------------- #
 # phone-facing HTML (self-contained, lightly themed)
 # --------------------------------------------------------------------------- #
-def _page(body):
+def _page(body, title="Add a calendar"):
     return f"""<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Add a calendar</title><style>
+<title>{title}</title><style>
   :root{{--ink:#3A3357;--soft:#8C84AB;--line:#EFEAFB;--grad:linear-gradient(120deg,#FFB3D1,#B39CFF 50%,#8FD0FF);}}
   *{{box-sizing:border-box}}
   body{{margin:0;font-family:system-ui,-apple-system,sans-serif;color:var(--ink);
@@ -457,6 +610,27 @@ def render_result_page(ok, msg):
     title = "All set!" if ok else "Hmm…"
     return _page(f'<div class="big">{icon}</div><h1>{title}</h1>'
                  f'<p class="sub">{msg}</p>')
+
+
+def render_chore_page(token, ok):
+    if not ok:
+        return _page('<div class="big">⌛</div><h1>Window closed</h1>'
+                     '<p class="sub">Tap “Add chore by phone” on the wall to start again.</p>',
+                     title="Add a chore")
+    return _page(f"""
+      <h1>Add a chore 🧹</h1>
+      <p class="sub">Type a chore for the family chart. It rotates through everyone,
+      a new person each day.</p>
+      <form method="POST" action="/chore">
+        <input type="hidden" name="token" value="{token}">
+        <label>Chore</label>
+        <input type="text" name="label" placeholder="Take out the trash" maxlength="40"
+               required autocapitalize="sentences">
+        <button type="submit">Add to the chart</button>
+      </form>
+      <p class="hint">Tip: end it with an emoji and it becomes a sticker on the
+      wall — e.g. “Water plants 🌱”.</p>
+    """, title="Add a chore")
 
 
 # --------------------------------------------------------------------------- #

@@ -74,8 +74,13 @@ Three things quietly gate everything downstream:
       timer; `done` is per-day (`doneDate === today`) and auto-resets. Chores
       render grouped under each person (avatar + color), and a Settings chore
       editor adds/renames/removes them. Pool = all people for now (a per-person
-      "in rotation" toggle is a future refinement). Frontend-only; rotation +
-      grouping logic verified.
+      "in rotation" toggle is a future refinement). Rotation + grouping logic
+      verified.
+      *Follow-up (same branch):* chore definitions moved to the box
+      (`data/chores.json` + `/api/chores` CRUD) so they're shared across devices
+      and can be added from a phone via a tap-to-open 2-min QR window
+      (`/api/chore-window/*`, `/chore`), mirroring the calendar flow. "Done"
+      stays box-local per-day. Covered in `tests/test_chores.py`.
 - [x] **Countdown widgets** — "12 days till the trip." DONE 2026-06-26 — a
       box-local list `{id, emoji, label, date}`; a compact rail panel shows
       future countdowns soonest-first ("today!" on the day, a gentle pulse for
