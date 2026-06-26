@@ -7,13 +7,15 @@ APPDIR="$(cd "$(dirname "$0")/.." && pwd)"
 USER_NAME="$(id -un)"
 echo "Installing Family Calendar from: $APPDIR  (user: $USER_NAME)"
 
-# 1. Python venv + deps
-if [ ! -d "$APPDIR/.venv" ]; then
+# 1. Python venv + deps (rebuild if missing or copied from another OS)
+if [ ! -x "$APPDIR/.venv/bin/python" ] || ! "$APPDIR/.venv/bin/python" -c '' 2>/dev/null; then
   echo "→ creating virtualenv"
+  rm -rf "$APPDIR/.venv"
   python3 -m venv "$APPDIR/.venv"
 fi
 "$APPDIR/.venv/bin/pip" install -q --upgrade pip
 "$APPDIR/.venv/bin/pip" install -q -r "$APPDIR/requirements.txt"
+mkdir -p "$APPDIR/photos"   # sleep-mode photo frame
 
 # 2. First fetch so the wall has data immediately
 echo "→ priming events.json"

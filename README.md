@@ -18,11 +18,12 @@ auth, and no secrets in the page.
 
 | File | What it is |
 |------|------------|
-| `family-calendar.html` | The styled front-end. Fetches `./events.json`, caches last-good copy, shows "synced N min ago". |
+| `family-calendar.html` | The styled front-end. Fetches `./events.json`, caches last-good copy, "synced N min ago", live weather chip, event reminders, photo-frame sleep mode. |
 | `fetcher.py` | Downloads + parses each feed, expands recurrences, writes `events.json` atomically. Keeps a dead feed's last-known events. |
-| `server.py` | Flask: serves the app + `events.json` same-origin, `/api/refresh`, `/api/info` (LAN IP). |
+| `server.py` | Flask: serves the app + `events.json`, the QR-add flow, feed management, `/api/weather`, and `/api/photos`. |
 | `data/feeds.json` | Calendar feed list (name, color, url). Ships with the US Holidays feed as a demo. |
-| `deploy/` | systemd units, kiosk autostart, and `install.sh`. |
+| `photos/` | Drop family photos here; they cycle in sleep mode. |
+| `deploy/` | systemd units, kiosk autostart, and `install.sh` — see [DEPLOY.md](DEPLOY.md). |
 
 ## Run locally (dev)
 
@@ -65,9 +66,10 @@ After editing, `python fetcher.py` (or wait for the timer) refreshes the wall.
 
 ## Status
 
-Built: serve-over-HTTP, the feed pipeline, recurrence expansion,
-all-day/multi-day events, last-good cache + "synced" indicator, dead-feed
-resilience, the QR-add flow, settings-panel feed management (rename / recolor /
-show-hide / remove), and systemd/kiosk wiring (milestones 1–6).
-Not yet built: the CalDAV add-on for private iCloud calendars (§8), and the
-separate feature bucket (weather API, week/day views, etc.).
+Built: the full feed pipeline (recurrence, all-day/multi-day), last-good cache
++ "synced" indicator, dead-feed resilience, the QR-add flow, settings-panel
+feed management (rename / recolor / show-hide / remove), live weather, event
+reminders (chime + "up next" countdown), photo-frame sleep mode, and
+systemd/kiosk deploy wiring.
+Not yet built: the CalDAV add-on for private iCloud calendars, and week/day
+views (the toggle buttons are still placeholders).
