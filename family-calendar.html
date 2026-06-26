@@ -181,6 +181,12 @@
   .chore .who{font-weight:800;font-size:12px;padding:3px 9px;border-radius:10px;color:#fff;}
   .chore .cicon{width:30px;height:30px;object-fit:contain;flex:0 0 auto;}
   .arow .eicon{width:26px;height:26px;object-fit:contain;flex:0 0 auto;margin-right:2px;}
+  /* sticker icons replacing UI emoji */
+  .panel h3 .hicon{width:30px;height:30px;object-fit:contain;flex:0 0 auto;}
+  .icon-btn .btnIcon{width:30px;height:30px;object-fit:contain;display:block;}
+  .greetIcon{height:34px;width:34px;object-fit:contain;vertical-align:-9px;}
+  .fam-edit .ctrlIcon{width:26px;height:26px;object-fit:contain;}
+  .inlineWarn{height:18px;width:18px;object-fit:contain;vertical-align:-4px;}
   .stars{margin-left:auto;font-weight:800;color:var(--butter);font-size:15px;}
 
   /* manual "sync now" button next to the synced-N-ago label */
@@ -271,8 +277,8 @@
       <div class="sub"><span id="todayLine">—</span> · <span id="syncTag" style="opacity:.8">…</span><button id="syncBtn" class="syncbtn" title="Sync now" aria-label="Sync now">⟳</button></div>
     </div>
     <div class="chip weather">
-      <img class="wxImg" id="wxImg" alt="" hidden>
-      <span class="emoji" id="wxEmoji">🌡️</span>
+      <img class="wxImg" id="wxImg" src="/icons/ui_temp.png" alt="">
+      <span class="emoji" id="wxEmoji" hidden>🌡️</span>
       <span class="big" id="wxTemp">—</span>
       <span style="color:var(--ink-soft);font-weight:800" id="wxLabel"></span>
     </div>
@@ -285,9 +291,9 @@
   <!-- TOOLBAR -->
   <div class="toolbar">
     <div class="seg" id="viewSeg">
-      <button class="btn active" data-view="month">Month</button>
-      <button class="btn" data-view="week">Week</button>
       <button class="btn" data-view="day">Day</button>
+      <button class="btn" data-view="week">Week</button>
+      <button class="btn active" data-view="month">Month</button>
       <button class="btn" data-view="year">Year</button>
     </div>
     <button class="icon-btn nav-arrow" id="prev">‹</button>
@@ -296,7 +302,7 @@
     <div class="spacer"></div>
     <button class="icon-btn" id="settingsBtn" title="Colors & family">🎨</button>
     <button class="icon-btn" id="soundBtn" title="Sound">🔔</button>
-    <button class="icon-btn" id="sleepBtn" title="Sleep">🌙</button>
+    <button class="icon-btn" id="sleepBtn" title="Sleep"><img class="btnIcon" src="/icons/ui_moon.png" alt="Sleep"></button>
   </div>
 
   <!-- MAIN -->
@@ -311,15 +317,15 @@
 
     <div class="rail">
       <div class="panel card agenda">
-        <h3>📅 Today</h3>
+        <h3><img class="hicon" src="/icons/ui_today.png" alt="">Today</h3>
         <div class="agenda-scroll" id="agenda"></div>
       </div>
       <div class="panel card">
-        <h3>⭐ Chores</h3>
+        <h3><img class="hicon" src="/icons/ui_chores.png" alt="">Chores</h3>
         <div id="chores"></div>
       </div>
       <div class="panel card">
-        <h3>👨‍👩‍👧‍👦 Family</h3>
+        <h3><img class="hicon" src="/icons/ui_family.png" alt="">Family</h3>
         <div class="fam" id="fam"></div>
       </div>
     </div>
@@ -546,9 +552,7 @@ async function loadWeather(){
     const r=await fetch('/api/weather?_='+Date.now(),{cache:'no-store'});
     const w=await r.json();
     if(!w.ok) return;
-    const img=$("#wxImg"), em=$("#wxEmoji");
-    if(w.icon){ img.src='/icons/'+w.icon+'.png'; img.hidden=false; em.style.display='none'; }
-    else { em.textContent=w.emoji; em.style.display=''; img.hidden=true; }
+    $("#wxImg").src='/icons/'+(w.icon||'ui_temp')+'.png';   // sticker, or thermometer fallback
     $("#wxTemp").textContent=w.temp+'°';
     $("#wxLabel").textContent=w.label;
   }catch(e){/* leave whatever's showing */}
@@ -721,7 +725,6 @@ function renderDay(){
       cell.appendChild(row);
     });
   }
-  cell.addEventListener("click",()=>{ pop(); openAdd(n); });
   grid.appendChild(cell);
 }
 
@@ -859,7 +862,8 @@ function tick(){
   const dows=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
   const line=`${dows[n.getDay()]}, ${monthName(n.getMonth())} ${n.getDate()}`;
   $("#todayLine").textContent=line; $("#sleepDate").textContent=line;
-  $("#hello").textContent = h<12?"Good morning! 🌸" : h<17?"Good afternoon! ☀️" : "Good evening! 🌙";
+  const g = h<12?["Good morning","greet_am"] : h<17?["Good afternoon","greet_pm"] : ["Good evening","ui_moon"];
+  $("#hello").innerHTML = `${g[0]} <img class="greetIcon" src="/icons/${g[1]}.png" alt="">`;
 }
 
 /* ============================================================
@@ -1064,8 +1068,8 @@ function renderFeedEditor(){
     row.style.opacity = f.enabled===false ? .5 : 1;
     row.innerHTML=`<input type="color" value="${f.color}">
       <input type="text" value="${f.name}" maxlength="20">
-      <button class="eye" title="Show/hide" style="width:42px;height:46px;border:0;border-radius:13px;background:var(--lav-soft);color:var(--lav);font-size:18px;cursor:pointer;flex:none;">${f.enabled===false?'🚫':'👁️'}</button>
-      <button class="del" title="Remove">✕</button>`;
+      <button class="eye" title="Show/hide" style="width:42px;height:46px;border:0;border-radius:13px;background:var(--lav-soft);cursor:pointer;flex:none;display:grid;place-items:center;"><img class="ctrlIcon" src="/icons/${f.enabled===false?'ui_hide':'ui_show'}.png" alt=""></button>
+      <button class="del" title="Remove"><img class="ctrlIcon" src="/icons/ui_delete.png" alt="Remove"></button>`;
     const col=row.querySelector('input[type=color]');
     const name=row.querySelector('input[type=text]');
     const eye=row.querySelector('.eye');
@@ -1085,6 +1089,7 @@ function renderFeedEditor(){
     });
     del.addEventListener("click",()=>{
       pop();
+      if(!confirm(`Delete the “${f.name}” calendar? Its events will be removed from the wall.`)) return;
       FEED_LIST.splice(i,1);                            // optimistic
       events=events.filter(e=>e.local || e.feedName!==f.name);
       FAMILY=familyFromFeeds(); renderFeedEditor(); liveRefresh();
@@ -1117,7 +1122,7 @@ async function openQrFlow(){
     $("#qrStatus").textContent='waiting for your phone…';
     clearInterval(qrPoll); qrPoll=setInterval(pollQr,1500);
   }catch(e){
-    $("#qrStatus").textContent='⚠️ couldn’t start — is the box online?';
+    $("#qrStatus").innerHTML='<img class="inlineWarn" src="/icons/ui_warn.png" alt=""> couldn’t start — is the box online?';
   }
 }
 async function pollQr(){
@@ -1159,7 +1164,7 @@ async function openFeedFlow(){
     $("#dlIcs").href=f.ics_download;
     $("#dlCsv").href=f.csv_download;
   }catch(e){
-    $("#feedUrl").textContent='⚠️ couldn’t reach the box';
+    $("#feedUrl").innerHTML='<img class="inlineWarn" src="/icons/ui_warn.png" alt=""> couldn’t reach the box';
   }
 }
 function closeFeed(){$("#feedmodal").classList.remove("on");}
