@@ -65,9 +65,9 @@ After editing, `python fetcher.py` (or wait for the timer) refreshes the wall.
 
 ## Status
 
-Built: serve-over-HTTP, the one-feed pipeline, recurrence expansion,
+Built: serve-over-HTTP, the feed pipeline, recurrence expansion,
 all-day/multi-day events, last-good cache + "synced" indicator, dead-feed
-resilience, the QR-add flow, and systemd/kiosk wiring (milestones 1–4 + 6).
-Not yet built: the settings-panel→feeds reconciliation (rename/recolor/remove
-existing feeds, milestone 5) and the CalDAV add-on for private iCloud
-calendars (§8).
+resilience, the QR-add flow, settings-panel feed management (rename / recolor /
+show-hide / remove), and systemd/kiosk wiring (milestones 1–6).
+Not yet built: the CalDAV add-on for private iCloud calendars (§8), and the
+separate feature bucket (weather API, week/day views, etc.).

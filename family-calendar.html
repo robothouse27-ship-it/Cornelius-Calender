@@ -290,19 +290,15 @@
 <!-- SETTINGS / COLOR EDITOR -->
 <div id="settings">
   <div class="sheet tall">
-    <h2>Colors &amp; family 🎨</h2>
+    <h2>Calendars &amp; colors 🎨</h2>
     <div class="field">
       <label>Theme palette</label>
       <div class="themes" id="themePicker"></div>
     </div>
     <div class="field">
-      <label>Family members &amp; colors</label>
-      <div id="famEditor"></div>
-      <button class="btn" id="addFam" style="margin-top:8px;font-size:14px;padding:9px 16px;">+ Add person</button>
-    </div>
-    <div class="field">
-      <label>Calendars</label>
-      <button class="btn primary" id="addCal" style="font-size:15px;padding:12px 18px;">📲 Add a calendar</button>
+      <label>Calendars &amp; colors</label>
+      <div id="feedEditor"></div>
+      <button class="btn primary" id="addCal" style="margin-top:10px;font-size:15px;padding:12px 18px;">📲 Add a calendar</button>
     </div>
     <div class="sheet-actions">
       <button class="btn primary" id="sDone">Done</button>
@@ -406,12 +402,30 @@ function shapeImported(doc){
   });
 }
 
+let FEED_LIST = [];   // full feed objects (incl. id/enabled) from /api/info
+
+/* legend + manual-add swatches follow the managed feed list */
+function familyFromFeeds(){
+  return FEED_LIST.length ? FEED_LIST.map(f=>({name:f.name,color:f.color}))
+                          : (FEEDS.length ? FEEDS : FAMILY_DEFAULT);
+}
+
 /* Rebuild the in-memory list from a parsed events.json doc + local adds. */
 function applyDoc(doc){
   FEEDS = (doc.feeds||[]).map(f=>({name:f.name,color:f.color}));
-  FAMILY = FEEDS.length ? FEEDS : FAMILY_DEFAULT;   // legend & swatches follow feeds
+  FAMILY = familyFromFeeds();
   events = shapeImported(doc).concat(localEvents);
   if(doc.generated_at) lastSync = new Date(doc.generated_at);
+}
+
+/* Pull the managed feed list (feeds.json, incl. disabled) for the editor + legend. */
+async function loadFeeds(){
+  try{
+    const r = await fetch('/api/info?_='+Date.now(), {cache:'no-store'});
+    const j = await r.json();
+    FEED_LIST = j.feeds || [];
+    FAMILY = familyFromFeeds();
+  }catch(e){/* keep whatever we had */}
 }
 
 /* Fetch events.json; fall back to cached copy, then to empty. */
@@ -704,30 +718,60 @@ function renderThemePicker(){
     p.appendChild(c);
   });
 }
-function renderFamEditor(){
-  const e=$("#famEditor");e.innerHTML="";
-  FAMILY.forEach((p,i)=>{
+/* persist a feed change to the box, then re-pull events so colors/names
+   and enable/disable take effect on the wall (fetch runs server-side). */
+function patchFeed(id, body){
+  fetch('/api/feeds/update',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({id,...body})}).catch(()=>{});
+  setTimeout(()=>{ loadFeeds(); loadEvents(); }, 1800);
+}
+function recolorEvents(feedName,color){
+  events.forEach(e=>{ if(!e.local && e.feedName===feedName) e.color=color; });
+}
+
+function renderFeedEditor(){
+  const wrap=$("#feedEditor");wrap.innerHTML="";
+  if(!FEED_LIST.length){
+    wrap.innerHTML=`<div class="empty" style="padding:8px 4px">No calendars yet — tap “Add a calendar”.</div>`;
+    return;
+  }
+  FEED_LIST.forEach((f,i)=>{
     const row=document.createElement("div");row.className="fam-edit";
-    row.innerHTML=`<input type="color" value="${p.color}">
-      <input type="text" value="${p.name}" maxlength="14">
+    row.style.opacity = f.enabled===false ? .5 : 1;
+    row.innerHTML=`<input type="color" value="${f.color}">
+      <input type="text" value="${f.name}" maxlength="20">
+      <button class="eye" title="Show/hide" style="width:42px;height:46px;border:0;border-radius:13px;background:var(--lav-soft);color:var(--lav);font-size:18px;cursor:pointer;flex:none;">${f.enabled===false?'🚫':'👁️'}</button>
       <button class="del" title="Remove">✕</button>`;
     const col=row.querySelector('input[type=color]');
     const name=row.querySelector('input[type=text]');
+    const eye=row.querySelector('.eye');
     const del=row.querySelector('.del');
-    col.addEventListener("input",()=>{FAMILY[i].color=col.value;saveFamily();liveRefresh();});
-    name.addEventListener("input",()=>{FAMILY[i].name=name.value;saveFamily();liveRefresh();});
-    del.addEventListener("click",()=>{
-      if(FAMILY.length<=1)return;
-      FAMILY.splice(i,1);saveFamily();renderFamEditor();liveRefresh();pop();
+    col.addEventListener("input",()=>{                 // live recolor on the wall
+      f.color=col.value; FAMILY=familyFromFeeds();
+      recolorEvents(f.name,col.value); renderCalendar();renderAgenda();renderFamily();
     });
-    e.appendChild(row);
+    col.addEventListener("change",()=>patchFeed(f.id,{color:f.color}));
+    name.addEventListener("change",()=>{
+      f.name=name.value.trim()||f.name; FAMILY=familyFromFeeds();
+      renderFamily(); patchFeed(f.id,{name:f.name});
+    });
+    eye.addEventListener("click",()=>{
+      f.enabled = f.enabled===false; pop();            // toggle
+      renderFeedEditor(); patchFeed(f.id,{enabled:f.enabled});
+    });
+    del.addEventListener("click",()=>{
+      pop();
+      FEED_LIST.splice(i,1);                            // optimistic
+      events=events.filter(e=>e.local || e.feedName!==f.name);
+      FAMILY=familyFromFeeds(); renderFeedEditor(); liveRefresh();
+      fetch('/api/feeds/delete',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({id:f.id})}).catch(()=>{});
+      setTimeout(()=>{ loadFeeds(); loadEvents(); }, 1800);
+    });
+    wrap.appendChild(row);
   });
 }
-$("#addFam").addEventListener("click",()=>{
-  FAMILY.push({name:"New",color:COLORS[FAMILY.length%COLORS.length]});
-  saveFamily();renderFamEditor();liveRefresh();pop();
-});
-$("#settingsBtn").addEventListener("click",()=>{pop();$("#settings").classList.add("on");renderThemePicker();renderFamEditor();});
+$("#settingsBtn").addEventListener("click",()=>{pop();$("#settings").classList.add("on");renderThemePicker();loadFeeds().then(renderFeedEditor);});
 $("#sDone").addEventListener("click",()=>{pop();$("#settings").classList.remove("on");});
 $("#settings").addEventListener("click",e=>{if(e.target.id==="settings"){pop();$("#settings").classList.remove("on");}});
 
@@ -761,7 +805,7 @@ async function pollQr(){
       clearInterval(qrPoll);
       $("#qrStatus").innerHTML=`🎉 Added <b>${s.added.name}</b> — refreshing…`;
       confettiBurst(); pop(true);
-      loadEvents();
+      loadFeeds().then(()=>{ renderFeedEditor(); loadEvents(); });
       setTimeout(closeQr, 2200);
     }else if(!s.open){
       clearInterval(qrPoll);
@@ -784,8 +828,8 @@ tick();setInterval(tick,1000);
 renderCalendar();renderAgenda();renderChores();renderFamily();
 updateSoundBtn();resetIdle();
 
-/* load real feeds, then poll for fresh data + refresh the "synced" tag */
-loadEvents();
+/* load the managed feed list + events, then poll for fresh data */
+loadFeeds().then(loadEvents);
 setInterval(loadEvents, 3*60*1000);   // re-fetch events.json every 3 min
 setInterval(updateSync, 30*1000);     // keep the "N min ago" label honest
 </script>

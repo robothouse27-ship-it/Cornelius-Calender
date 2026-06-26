@@ -92,6 +92,10 @@ def valid_feed_url(url):
     return bool(re.match(r"^(https?|webcal)://", url.strip(), re.I))
 
 
+def valid_color(c):
+    return isinstance(c, str) and bool(re.match(r"^#[0-9a-fA-F]{6}$", c))
+
+
 # --------------------------------------------------------------------------- #
 # app + data
 # --------------------------------------------------------------------------- #
@@ -116,6 +120,40 @@ def refresh():
 def info():
     return jsonify({"lan_ip": lan_ip(), "port": PORT,
                     "feeds": load_feeds().get("feeds", [])})
+
+
+@app.route("/api/feeds/update", methods=["POST"])
+def feeds_update():
+    """Rename / recolor / enable-disable an existing feed (milestone 5)."""
+    body = request.get_json(force=True, silent=True) or {}
+    fid = body.get("id")
+    doc = load_feeds()
+    for f in doc.get("feeds", []):
+        if f.get("id") == fid:
+            if "name" in body:
+                f["name"] = (str(body["name"]).strip()[:30] or f["name"])
+            if "color" in body and valid_color(body["color"]):
+                f["color"] = body["color"]
+            if "enabled" in body:
+                f["enabled"] = bool(body["enabled"])
+            save_feeds(doc)
+            trigger_fetch()
+            return jsonify({"ok": True, "feed": f})
+    return jsonify({"ok": False, "error": "not found"}), 404
+
+
+@app.route("/api/feeds/delete", methods=["POST"])
+def feeds_delete():
+    body = request.get_json(force=True, silent=True) or {}
+    fid = body.get("id")
+    doc = load_feeds()
+    before = len(doc.get("feeds", []))
+    doc["feeds"] = [f for f in doc.get("feeds", []) if f.get("id") != fid]
+    if len(doc["feeds"]) == before:
+        return jsonify({"ok": False, "error": "not found"}), 404
+    save_feeds(doc)
+    trigger_fetch()
+    return jsonify({"ok": True})
 
 
 # --------------------------------------------------------------------------- #

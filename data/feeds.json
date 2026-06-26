@@ -7,6 +7,14 @@
       "type": "ics",
       "url": "https://calendar.google.com/calendar/ical/en.usa%23holiday%40group.v.calendar.google.com/public/basic.ics",
       "enabled": true
+    },
+    {
+      "id": "f_f43241",
+      "name": "Benji",
+      "color": "#46D6B4",
+      "type": "ics",
+      "url": "REDACTED-PRIVATE-CALENDAR-URL",
+      "enabled": true
     }
   ]
 }
