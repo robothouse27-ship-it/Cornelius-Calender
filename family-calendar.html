@@ -190,6 +190,25 @@
 
   canvas#confetti{position:fixed;inset:0;pointer-events:none;z-index:200;}
 
+  /* ===================== REMINDERS ===================== */
+  .toast-wrap{position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:160;
+    display:flex;flex-direction:column;gap:10px;align-items:center;pointer-events:none;}
+  .toast{pointer-events:auto;cursor:pointer;background:var(--surface);border-radius:20px;
+    box-shadow:0 16px 40px rgba(94,72,150,.28);padding:14px 22px 14px 16px;display:flex;
+    align-items:center;gap:14px;min-width:300px;max-width:80vw;
+    border-left:8px solid var(--lav);animation:toastIn .45s cubic-bezier(.2,1.2,.4,1);}
+  .toast.out{animation:toastOut .4s ease forwards;}
+  .toast .tEmoji{font-size:30px;line-height:1;}
+  .toast .tBody{flex:1;min-width:0;}
+  .toast .tTitle{font-family:"Fredoka";font-weight:600;font-size:18px;line-height:1.1;}
+  .toast .tWhen{color:var(--ink-soft);font-weight:800;font-size:13px;margin-top:2px;}
+  @keyframes toastIn{from{opacity:0;transform:translateY(-26px) scale(.96)}to{opacity:1;transform:none}}
+  @keyframes toastOut{to{opacity:0;transform:translateY(-26px) scale(.96)}}
+  /* "up next" highlight in the agenda */
+  .arow.next{background:#fff;border:2px solid var(--lav);box-shadow:0 6px 16px rgba(150,110,220,.18);}
+  .arow .badge{margin-left:auto;font-weight:800;font-size:11px;color:#fff;background:var(--grad-hero);
+    padding:3px 9px;border-radius:10px;white-space:nowrap;flex:none;}
+
   @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important;}}
 </style>
 </head>
@@ -286,6 +305,7 @@
 </div>
 
 <canvas id="confetti"></canvas>
+<div class="toast-wrap" id="toasts"></div>
 
 <!-- SETTINGS / COLOR EDITOR -->
 <div id="settings">
@@ -523,14 +543,34 @@ function renderCalendar(){
   });
 }
 
+/* a Date for a timed event today, or null for all-day */
+function eventStart(e){
+  const m=minsOf(e.time); if(m<0) return null;
+  return new Date(Y,M,D,Math.floor(m/60),m%60);
+}
+function countdownText(mins){
+  if(mins<1) return "now";
+  if(mins<60) return `in ${mins} min`;
+  const h=Math.floor(mins/60), m=mins%60;
+  return m ? `in ${h}h ${m}m` : `in ${h}h`;
+}
+
 function renderAgenda(){
   const a=$("#agenda"); a.innerHTML="";
   const list=events.filter(e=>e.date===TODAY_KEY).sort((x,y)=>minsOf(x.time)-minsOf(y.time));
   if(!list.length){a.innerHTML=`<div class="empty">Nothing today — enjoy the calm 🌿</div>`;return;}
+  const now=new Date();
+  // the soonest event still ahead of us = "up next"
+  const next=list.find(e=>{const s=eventStart(e);return s&&s>now;});
   list.forEach(e=>{
-    const r=document.createElement("div");r.className="arow";
+    const r=document.createElement("div");r.className="arow"+(e===next?" next":"");
+    let badge="";
+    if(e===next){
+      const mins=Math.round((eventStart(e)-now)/60000);
+      badge=`<span class="badge">${countdownText(mins)}</span>`;
+    }
     r.innerHTML=`<span class="dot" style="background:${e.color||famColor(e.fam)}"></span>
-      <span class="when">${e.time}</span><span class="what">${e.title}</span>`;
+      <span class="when">${e.time}</span><span class="what">${e.title}</span>${badge}`;
     a.appendChild(r);
   });
 }
@@ -832,6 +872,52 @@ $("#qrClose").addEventListener("click",()=>{pop();closeQr();});
 $("#qrmodal").addEventListener("click",e=>{if(e.target.id==="qrmodal"){pop();closeQr();}});
 
 /* ============================================================
+   REMINDERS  — chime + slide-in banner before/at each timed event,
+   and a live "up next" countdown in the Today panel. Wakes the wall
+   from sleep so nobody misses it.
+   ============================================================ */
+const firedReminders = new Set();
+const REMINDER_LEAD = 10;   // minutes before an event to nudge
+
+function showToast(emoji,title,when,color){
+  const wrap=$("#toasts");
+  const t=document.createElement("div");t.className="toast";
+  if(color) t.style.borderLeftColor=color;
+  t.innerHTML=`<span class="tEmoji">${emoji}</span>
+    <div class="tBody"><div class="tTitle"></div><div class="tWhen"></div></div>`;
+  t.querySelector(".tTitle").textContent=title;     // textContent = no HTML injection
+  t.querySelector(".tWhen").textContent=when;
+  const close=()=>{t.classList.add("out");setTimeout(()=>t.remove(),420);};
+  t.addEventListener("click",close);
+  wrap.appendChild(t);
+  setTimeout(close,30000);
+}
+
+function fireReminder(e,kind){
+  const lead = kind==='lead';
+  const when = lead ? `Starts at ${e.time}` : `Starting now · ${e.time}`;
+  showToast(lead?'⏰':'▶️', e.title, when, e.color||famColor(e.fam));
+  pop(true);
+  if($("#sleep").classList.contains("on")) wake();
+}
+
+function checkReminders(){
+  const now=new Date();
+  events.forEach(e=>{
+    if(e.date!==TODAY_KEY) return;
+    const s=eventStart(e); if(!s) return;
+    const diff=(s-now)/60000;                       // minutes until start
+    const sig=e.date+'|'+e.time+'|'+e.title;
+    if(diff>0 && diff<=REMINDER_LEAD && !firedReminders.has(sig+':lead')){
+      firedReminders.add(sig+':lead'); fireReminder(e,'lead');
+    }
+    if(diff<=0 && diff>-2 && !firedReminders.has(sig+':start')){
+      firedReminders.add(sig+':start'); fireReminder(e,'start');
+    }
+  });
+}
+
+/* ============================================================
    GO
    ============================================================ */
 applyTheme(themeKey);
@@ -846,6 +932,9 @@ setInterval(updateSync, 30*1000);     // keep the "N min ago" label honest
 
 loadWeather();
 setInterval(loadWeather, 15*60*1000); // refresh weather every 15 min
+
+checkReminders();
+setInterval(()=>{ checkReminders(); renderAgenda(); }, 30*1000); // nudge + live countdown
 </script>
 </body>
 </html>
