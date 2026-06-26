@@ -202,9 +202,9 @@
       <div class="sub"><span id="todayLine">—</span> · <span id="syncTag" style="opacity:.8">…</span></div>
     </div>
     <div class="chip weather">
-      <span class="emoji">☀️</span>
-      <span class="big">72°</span>
-      <span style="color:var(--ink-soft);font-weight:800">Sunny</span>
+      <span class="emoji" id="wxEmoji">🌡️</span>
+      <span class="big" id="wxTemp">—</span>
+      <span style="color:var(--ink-soft);font-weight:800" id="wxLabel"></span>
     </div>
     <div class="chip clock">
       <span class="big" id="clockBig">—</span>
@@ -440,6 +440,17 @@ async function loadEvents(){
     applyDoc(store.get('events_cache', null) || {feeds:[],events:[]});
   }
   liveRefresh(); updateSync();
+}
+
+async function loadWeather(){
+  try{
+    const r=await fetch('/api/weather?_='+Date.now(),{cache:'no-store'});
+    const w=await r.json();
+    if(!w.ok) return;
+    $("#wxEmoji").textContent=w.emoji;
+    $("#wxTemp").textContent=w.temp+'°';
+    $("#wxLabel").textContent=w.label;
+  }catch(e){/* leave whatever's showing */}
 }
 
 function updateSync(){
@@ -832,6 +843,9 @@ updateSoundBtn();resetIdle();
 loadFeeds().then(loadEvents);
 setInterval(loadEvents, 3*60*1000);   // re-fetch events.json every 3 min
 setInterval(updateSync, 30*1000);     // keep the "N min ago" label honest
+
+loadWeather();
+setInterval(loadWeather, 15*60*1000); // refresh weather every 15 min
 </script>
 </body>
 </html>

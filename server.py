@@ -24,6 +24,7 @@ import uuid
 from pathlib import Path
 
 import qrcode
+import requests
 from flask import Flask, send_file, jsonify, request, Response, abort
 
 HERE = Path(__file__).resolve().parent
@@ -294,6 +295,70 @@ def render_result_page(ok, msg):
     title = "All set!" if ok else "Hmm…"
     return _page(f'<div class="big">{icon}</div><h1>{title}</h1>'
                  f'<p class="sub">{msg}</p>')
+
+
+# --------------------------------------------------------------------------- #
+# weather (Open-Meteo, no API key) with IP-based geolocation + caching
+# --------------------------------------------------------------------------- #
+# WMO weather codes → (emoji, short label)
+WMO = {
+    0: ("☀️", "Clear"), 1: ("🌤️", "Mostly clear"), 2: ("⛅", "Partly cloudy"),
+    3: ("☁️", "Cloudy"), 45: ("🌫️", "Fog"), 48: ("🌫️", "Fog"),
+    51: ("🌦️", "Drizzle"), 53: ("🌦️", "Drizzle"), 55: ("🌦️", "Drizzle"),
+    61: ("🌧️", "Rain"), 63: ("🌧️", "Rain"), 65: ("🌧️", "Heavy rain"),
+    66: ("🌧️", "Freezing rain"), 67: ("🌧️", "Freezing rain"),
+    71: ("🌨️", "Snow"), 73: ("🌨️", "Snow"), 75: ("❄️", "Heavy snow"),
+    77: ("🌨️", "Snow grains"), 80: ("🌦️", "Showers"), 81: ("🌦️", "Showers"),
+    82: ("⛈️", "Heavy showers"), 85: ("🌨️", "Snow showers"),
+    86: ("🌨️", "Snow showers"), 95: ("⛈️", "Thunderstorm"),
+    96: ("⛈️", "Thunderstorm"), 99: ("⛈️", "Thunderstorm"),
+}
+_geo = {"lat": None, "lon": None, "city": None}
+_weather_cache = {"at": 0.0, "data": None}
+
+
+def geolocate():
+    """lat/lon from env if set, else best-effort IP geolocation (cached)."""
+    if _geo["lat"] is not None:
+        return _geo
+    lat = os.environ.get("FAMILYCAL_LAT")
+    lon = os.environ.get("FAMILYCAL_LON")
+    if lat and lon:
+        _geo.update(lat=float(lat), lon=float(lon),
+                    city=os.environ.get("FAMILYCAL_CITY", ""))
+        return _geo
+    try:
+        r = requests.get("http://ip-api.com/json/?fields=lat,lon,city", timeout=6)
+        j = r.json()
+        _geo.update(lat=j["lat"], lon=j["lon"], city=j.get("city", ""))
+    except (requests.RequestException, KeyError, ValueError):
+        pass
+    return _geo
+
+
+@app.route("/api/weather")
+def weather():
+    """Current conditions in °F. Cached ~15 min so we don't hammer the API."""
+    if _weather_cache["data"] and time.time() - _weather_cache["at"] < 900:
+        return jsonify(_weather_cache["data"])
+    g = geolocate()
+    if g["lat"] is None:
+        return jsonify({"ok": False})
+    try:
+        r = requests.get("https://api.open-meteo.com/v1/forecast", timeout=8, params={
+            "latitude": g["lat"], "longitude": g["lon"],
+            "current": "temperature_2m,weather_code",
+            "temperature_unit": "fahrenheit", "timezone": "auto"})
+        cur = r.json()["current"]
+        emoji, label = WMO.get(cur["weather_code"], ("🌡️", ""))
+        data = {"ok": True, "temp": round(cur["temperature_2m"]),
+                "emoji": emoji, "label": label, "city": g.get("city", "")}
+        _weather_cache.update(at=time.time(), data=data)
+        return jsonify(data)
+    except (requests.RequestException, KeyError, ValueError):
+        if _weather_cache["data"]:
+            return jsonify(_weather_cache["data"])  # stale-but-good
+        return jsonify({"ok": False})
 
 
 if __name__ == "__main__":
