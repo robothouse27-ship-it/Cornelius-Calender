@@ -47,8 +47,17 @@ Three things quietly gate everything downstream:
 ## Phase 2 — The "who" model (keystone)
 *Small data-model change; the hinge three features hang on. Do third.*
 
-- [ ] **Person/owner concept** — tag events/feeds with an owner + color +
-      avatar.
+- [x] **Person/owner concept** — tag events/feeds with an owner + color +
+      avatar. DONE 2026-06-26 — a `people` registry (`{id,name,color,avatar}`,
+      emoji avatars) in `feeds.json`; feeds carry `owner_id`; events resolve
+      owner via their feed (no per-event stamping, so a dead feed's cached
+      events can't carry a stale owner). `fetcher.py` flows `people` +
+      per-feed `owner_id` into events.json; `server.py` adds people CRUD
+      (`/api/people/{add,update,delete}`), owner assignment via
+      `/api/feeds/update`, owner-aware `.ics` CATEGORIES, and people in
+      `/api/info`. Wall legend shows avatars. Covered in `tests/test_people.py`.
+      *Not yet built: an on-wall people-management UI (assign owners from the
+      phone form) — natural to fold into Phase 3.*
 
 ## Phase 3 — Features that ride on the keystone
 

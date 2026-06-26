@@ -127,6 +127,7 @@ def parse_feed(text, feed, win_start, win_end):
 def main():
     DATA.mkdir(exist_ok=True)
     feeds_doc = load_json(FEEDS_PATH, {"feeds": []})
+    people = feeds_doc.get("people", [])          # owner registry (Phase 2)
     feeds = [f for f in feeds_doc.get("feeds", []) if f.get("enabled", True)]
     win_start, win_end = window_bounds()
 
@@ -144,7 +145,8 @@ def main():
     feed_meta = []
     for feed in feeds:
         meta = {"id": feed["id"], "name": feed.get("name", "Calendar"),
-                "color": feed.get("color", "#A98CFF")}
+                "color": feed.get("color", "#A98CFF"),
+                "owner_id": feed.get("owner_id")}
         feed_meta.append(meta)
         prior = prev_health.get(feed["id"], {})
         try:
@@ -165,6 +167,7 @@ def main():
         "generated_at": now_iso,
         "window": {"start": win_start.isoformat(), "end": win_end.isoformat()},
         "timezone": TZ_NAME,
+        "people": people,
         "feeds": feed_meta,
         "events": all_events,
     }

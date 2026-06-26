@@ -508,9 +508,12 @@ function shapeImported(doc){
 }
 
 let FEED_LIST = [];   // full feed objects (incl. id/enabled) from /api/info
+let PEOPLE = [];      // owner registry {id,name,color,avatar} (Phase 2)
 
-/* legend + manual-add swatches follow the managed feed list */
+/* The legend = people if any are defined, else the feed list, else defaults.
+   Owners are the "who"; feeds fall back to acting as people when none exist. */
 function familyFromFeeds(){
+  if(PEOPLE.length) return PEOPLE.map(p=>({name:p.name,color:p.color,avatar:p.avatar}));
   return FEED_LIST.length ? FEED_LIST.map(f=>({name:f.name,color:f.color}))
                           : (FEEDS.length ? FEEDS : FAMILY_DEFAULT);
 }
@@ -518,6 +521,7 @@ function familyFromFeeds(){
 /* Rebuild the in-memory list from a parsed events.json doc + local adds. */
 function applyDoc(doc){
   FEEDS = (doc.feeds||[]).map(f=>({name:f.name,color:f.color}));
+  if(doc.people) PEOPLE = doc.people;
   FAMILY = familyFromFeeds();
   events = shapeImported(doc).concat(localEvents);
   if(doc.generated_at) lastSync = new Date(doc.generated_at);
@@ -529,6 +533,7 @@ async function loadFeeds(){
     const r = await fetch('/api/info?_='+Date.now(), {cache:'no-store'});
     const j = await r.json();
     FEED_LIST = j.feeds || [];
+    PEOPLE = j.people || PEOPLE;
     FAMILY = familyFromFeeds();
   }catch(e){/* keep whatever we had */}
 }
@@ -845,7 +850,8 @@ function renderFamily(){
   const f=$("#fam"); f.innerHTML="";
   FAMILY.forEach(p=>{
     const el=document.createElement("div");el.className="pill";
-    el.innerHTML=`<span class="dot" style="background:${p.color}"></span>${p.name}`;
+    const ava = p.avatar ? `${p.avatar} ` : "";
+    el.innerHTML=`<span class="dot" style="background:${p.color}"></span>${ava}${p.name}`;
     f.appendChild(el);
   });
 }

@@ -104,6 +104,11 @@ def valid_color(c):
     return isinstance(c, str) and bool(re.match(r"^#[0-9a-fA-F]{6}$", c))
 
 
+def valid_avatar(a):
+    """A short emoji/glyph. Allow ZWJ sequences but no newlines or essays."""
+    return isinstance(a, str) and 0 < len(a.strip()) <= 8 and "\n" not in a
+
+
 # --------------------------------------------------------------------------- #
 # app + data
 # --------------------------------------------------------------------------- #
@@ -136,8 +141,71 @@ def refresh():
 
 @app.route("/api/info")
 def info():
+    doc = load_feeds()
     return jsonify({"lan_ip": lan_ip(), "port": PORT,
-                    "feeds": load_feeds().get("feeds", [])})
+                    "feeds": doc.get("feeds", []),
+                    "people": doc.get("people", [])})
+
+
+# --------------------------------------------------------------------------- #
+# people / owners (Phase 2 keystone)
+#   A person is {id, name, color, avatar}. Feeds point at a person via
+#   owner_id; events resolve their owner through their feed. This is the hinge
+#   the per-person lanes, who's-home, and chore rotation hang on.
+# --------------------------------------------------------------------------- #
+@app.route("/api/people/add", methods=["POST"])
+def people_add():
+    body = request.get_json(force=True, silent=True) or {}
+    name = str(body.get("name", "")).strip()[:30]
+    if not name:
+        return jsonify({"ok": False, "error": "name required"}), 400
+    person = {
+        "id": "p_" + uuid.uuid4().hex[:6],
+        "name": name,
+        "color": body["color"] if valid_color(body.get("color")) else PALETTE[0],
+        "avatar": body["avatar"].strip() if valid_avatar(body.get("avatar")) else "🙂",
+    }
+    doc = load_feeds()
+    doc.setdefault("people", []).append(person)
+    save_feeds(doc)
+    return jsonify({"ok": True, "person": person})
+
+
+@app.route("/api/people/update", methods=["POST"])
+def people_update():
+    body = request.get_json(force=True, silent=True) or {}
+    pid = body.get("id")
+    doc = load_feeds()
+    for p in doc.get("people", []):
+        if p.get("id") == pid:
+            if "name" in body:
+                p["name"] = (str(body["name"]).strip()[:30] or p["name"])
+            if "color" in body and valid_color(body["color"]):
+                p["color"] = body["color"]
+            if "avatar" in body and valid_avatar(body["avatar"]):
+                p["avatar"] = body["avatar"].strip()
+            save_feeds(doc)
+            trigger_fetch()                      # owner color/name flows to events.json
+            return jsonify({"ok": True, "person": p})
+    return jsonify({"ok": False, "error": "not found"}), 404
+
+
+@app.route("/api/people/delete", methods=["POST"])
+def people_delete():
+    body = request.get_json(force=True, silent=True) or {}
+    pid = body.get("id")
+    doc = load_feeds()
+    before = len(doc.get("people", []))
+    doc["people"] = [p for p in doc.get("people", []) if p.get("id") != pid]
+    if len(doc["people"]) == before:
+        return jsonify({"ok": False, "error": "not found"}), 404
+    # orphan any feeds that pointed at the deleted person
+    for f in doc.get("feeds", []):
+        if f.get("owner_id") == pid:
+            f["owner_id"] = None
+    save_feeds(doc)
+    trigger_fetch()
+    return jsonify({"ok": True})
 
 
 # how long the merged sync may go without a fresh run before it's "stale".
@@ -216,6 +284,7 @@ def feeds_update():
     body = request.get_json(force=True, silent=True) or {}
     fid = body.get("id")
     doc = load_feeds()
+    valid_owner_ids = {p.get("id") for p in doc.get("people", [])}
     for f in doc.get("feeds", []):
         if f.get("id") == fid:
             if "name" in body:
@@ -224,6 +293,12 @@ def feeds_update():
                 f["color"] = body["color"]
             if "enabled" in body:
                 f["enabled"] = bool(body["enabled"])
+            if "owner_id" in body:
+                owner = body["owner_id"]
+                if owner in (None, "") or owner in valid_owner_ids:
+                    f["owner_id"] = owner or None    # "" / None both clear it
+                else:
+                    return jsonify({"ok": False, "error": "unknown owner_id"}), 400
             save_feeds(doc)
             trigger_fetch()
             return jsonify({"ok": True, "feed": f})
@@ -470,13 +545,17 @@ def _load_events():
 def build_ics():
     """Merged family .ics from events.json (one calendar, person = category)."""
     doc, feeds = _load_events()
+    people = {p["id"]: p for p in doc.get("people", [])}
     now = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out = ["BEGIN:VCALENDAR", "VERSION:2.0",
            "PRODID:-//Cornelius Family Calendar//Wall//EN", "CALSCALE:GREGORIAN",
            "METHOD:PUBLISH", "X-WR-CALNAME:Family Calendar",
            f"X-WR-TIMEZONE:{doc.get('timezone', 'America/Los_Angeles')}"]
     for e in doc.get("events", []):
-        name = feeds.get(e.get("feed_id"), {}).get("name", "")
+        feed = feeds.get(e.get("feed_id"), {})
+        # categorize by owner (a person) when assigned, else the feed itself
+        owner = people.get(feed.get("owner_id"))
+        name = (owner or feed).get("name", "")
         out.append("BEGIN:VEVENT")
         out.append(f"UID:{e.get('id', 'evt_' + uuid.uuid4().hex[:8])}@familycal")
         out.append(f"DTSTAMP:{now}")
