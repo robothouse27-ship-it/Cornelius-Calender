@@ -11,6 +11,8 @@ anything when someone deliberately taps "Add" at the wall.
 
 Run:  python3 server.py        # http://0.0.0.0:8080
 """
+import csv
+import hmac
 import io
 import json
 import os
@@ -21,6 +23,7 @@ import sys
 import tempfile
 import time
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 import qrcode
@@ -31,6 +34,7 @@ HERE = Path(__file__).resolve().parent
 DATA = HERE / "data"
 EVENTS_PATH = DATA / "events.json"
 FEEDS_PATH = DATA / "feeds.json"
+EXPORT_PATH = DATA / "export.json"   # persistent secret token for the family feed
 PHOTOS_DIR = HERE / "photos"        # drop family photos here for sleep mode
 INDEX = HERE / "family-calendar.html"
 PORT = 8080
@@ -307,6 +311,177 @@ def render_result_page(ok, msg):
     title = "All set!" if ok else "Hmm…"
     return _page(f'<div class="big">{icon}</div><h1>{title}</h1>'
                  f'<p class="sub">{msg}</p>')
+
+
+# --------------------------------------------------------------------------- #
+# export / phone sync (docs-export-architecture.md)
+#   Re-publish the already-merged events.json as a single subscribable family
+#   .ics (phones "Add calendar by URL"), plus plain .ics/.csv downloads as a
+#   backstop. A persistent, rotatable secret token makes the feed URL an
+#   unguessable secret — treat it like Google's "secret iCal address".
+# --------------------------------------------------------------------------- #
+def export_token(rotate=False):
+    """Load the persistent feed token (creating it on first use, or rotating)."""
+    if not rotate and EXPORT_PATH.exists():
+        try:
+            return json.loads(EXPORT_PATH.read_text())["token"]
+        except (ValueError, KeyError, OSError):
+            pass
+    tok = uuid.uuid4().hex
+    fd, tmp = tempfile.mkstemp(dir=str(DATA), suffix=".tmp")
+    with os.fdopen(fd, "w") as fh:
+        json.dump({"token": tok}, fh)
+    os.replace(tmp, EXPORT_PATH)
+    try:
+        os.chmod(EXPORT_PATH, 0o600)
+    except OSError:
+        pass
+    return tok
+
+
+def _token_ok():
+    return hmac.compare_digest(request.args.get("token", ""), export_token())
+
+
+def _feed_urls():
+    host = f"{lan_ip()}:{PORT}"
+    tok = export_token()
+    path = f"/feed/family.ics?token={tok}"
+    return {
+        "token": tok,
+        "webcal": f"webcal://{host}{path}",       # tap-to-subscribe on phones
+        "https": f"http://{host}{path}",          # same feed over http
+        "ics_download": f"http://{host}/export/family.ics?token={tok}",
+        "csv_download": f"http://{host}/export/family.csv?token={tok}",
+    }
+
+
+def _ics_escape(s):
+    return (str(s or "")
+            .replace("\\", "\\\\").replace(";", "\\;")
+            .replace(",", "\\,").replace("\n", "\\n").replace("\r", ""))
+
+
+def _fold(line):
+    """RFC 5545 line folding to <=75 octets, never splitting a UTF-8 char."""
+    raw = line.encode("utf-8")
+    if len(raw) <= 75:
+        return line
+    chunks, start, limit = [], 0, 75
+    while len(raw) - start > limit:
+        cut = start + limit
+        while raw[cut] & 0xC0 == 0x80:   # don't split a multibyte sequence
+            cut -= 1
+        chunks.append(raw[start:cut])
+        start, limit = cut, 74           # continuation lines carry a leading space
+    chunks.append(raw[start:])
+    return "\r\n ".join(c.decode("utf-8") for c in chunks)
+
+
+def _ics_dt(iso):
+    """Timed event → UTC 'Z' stamp (phones localize it themselves)."""
+    dt = datetime.fromisoformat(iso)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def _ics_date(iso):
+    return datetime.fromisoformat(iso).strftime("%Y%m%d")
+
+
+def _load_events():
+    doc = json.loads(EVENTS_PATH.read_text()) if EVENTS_PATH.exists() else {}
+    feeds = {f["id"]: f for f in doc.get("feeds", [])}
+    return doc, feeds
+
+
+def build_ics():
+    """Merged family .ics from events.json (one calendar, person = category)."""
+    doc, feeds = _load_events()
+    now = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    out = ["BEGIN:VCALENDAR", "VERSION:2.0",
+           "PRODID:-//Cornelius Family Calendar//Wall//EN", "CALSCALE:GREGORIAN",
+           "METHOD:PUBLISH", "X-WR-CALNAME:Family Calendar",
+           f"X-WR-TIMEZONE:{doc.get('timezone', 'America/Los_Angeles')}"]
+    for e in doc.get("events", []):
+        name = feeds.get(e.get("feed_id"), {}).get("name", "")
+        out.append("BEGIN:VEVENT")
+        out.append(f"UID:{e.get('id', 'evt_' + uuid.uuid4().hex[:8])}@familycal")
+        out.append(f"DTSTAMP:{now}")
+        if e.get("all_day"):
+            out.append("DTSTART;VALUE=DATE:" + _ics_date(e["start"]))
+            if e.get("end"):
+                out.append("DTEND;VALUE=DATE:" + _ics_date(e["end"]))
+        else:
+            out.append("DTSTART:" + _ics_dt(e["start"]))
+            if e.get("end"):
+                out.append("DTEND:" + _ics_dt(e["end"]))
+        out.append("SUMMARY:" + _ics_escape(e.get("title", "(busy)")))
+        if name:
+            out.append("CATEGORIES:" + _ics_escape(name))
+        out.append("END:VEVENT")
+    out.append("END:VCALENDAR")
+    return "\r\n".join(_fold(ln) for ln in out) + "\r\n"
+
+
+def build_csv():
+    doc, feeds = _load_events()
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Calendar", "Title", "Start", "End", "All day"])
+    for e in doc.get("events", []):
+        w.writerow([feeds.get(e.get("feed_id"), {}).get("name", ""),
+                    e.get("title", ""), e.get("start", ""), e.get("end", ""),
+                    "yes" if e.get("all_day") else "no"])
+    return buf.getvalue()
+
+
+@app.route("/api/feed/info")
+def feed_info():
+    """Wall reads this to render the subscribe-QR + export links."""
+    return jsonify(_feed_urls())
+
+
+@app.route("/api/feed/qr")
+def feed_qr():
+    """PNG QR of the webcal:// subscribe URL (server-side, no JS dep)."""
+    img = qrcode.make(_feed_urls()["webcal"])
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return send_file(buf, mimetype="image/png")
+
+
+@app.route("/api/feed/rotate", methods=["POST"])
+def feed_rotate():
+    """Invalidate the old feed URL and mint a fresh one (security §4)."""
+    return jsonify({"ok": True, "feed": _feed_urls() if export_token(rotate=True) else None})
+
+
+@app.route("/feed/family.ics")
+def feed_family():
+    if not _token_ok():
+        abort(403)
+    return Response(build_ics(), mimetype="text/calendar; charset=utf-8")
+
+
+@app.route("/export/family.ics")
+def export_ics():
+    if not _token_ok():
+        abort(403)
+    return Response(build_ics(), mimetype="text/calendar; charset=utf-8",
+                    headers={"Content-Disposition":
+                             "attachment; filename=family-calendar.ics"})
+
+
+@app.route("/export/family.csv")
+def export_csv():
+    if not _token_ok():
+        abort(403)
+    return Response(build_csv(), mimetype="text/csv; charset=utf-8",
+                    headers={"Content-Disposition":
+                             "attachment; filename=family-calendar.csv"})
 
 
 # --------------------------------------------------------------------------- #
