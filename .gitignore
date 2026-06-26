@@ -10,3 +10,6 @@ data/server.log
 # family photos are personal — keep them out of git, but keep the folder
 photos/*
 !photos/README.txt
+
+# stray images dropped in the project root (keep them local, out of git)
+/*.png
