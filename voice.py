@@ -201,7 +201,7 @@ def speak(text):
             _piper = PiperVoice.load(PIPER_VOICE)
         wav_path = tempfile.mktemp(suffix=".wav")
         with wave.open(wav_path, "wb") as wf:
-            _piper.synthesize(text, wf)           # Piper writes a complete WAV
+            _piper.synthesize_wav(text, wf)       # Piper writes a complete WAV
         subprocess.run(["aplay", "-q", wav_path], check=False)
         os.remove(wav_path)
     except Exception as e:                         # never let TTS crash the loop
@@ -238,22 +238,14 @@ def main():
         log("couldn't query audio devices (", e, ") — exiting.")
         return 0
 
-    # openWakeWord ships ONNX + tflite model files; download them once (no-op if
-    # already cached) and force the ONNX runtime — tflite-runtime has no wheel
-    # for the wall's Python, so onnx is the path that actually loads here.
-    try:
-        import openwakeword.utils
-        openwakeword.utils.download_models()
-    except Exception as e:
-        log("openwakeword model download skipped:", e)
-
     log("loading models (whisper:", WHISPER_MODEL, "wake:", WAKE_WORD, ")")
     whisper = WhisperModel(WHISPER_MODEL, device="cpu", compute_type="int8")
-    try:
-        wake = WakeModel(wakeword_models=[WAKE_WORD], inference_framework="onnx")
-    except Exception as e:
-        log("wake model", WAKE_WORD, "failed (", e, ") — loading all default models")
-        wake = WakeModel(inference_framework="onnx")
+    # openWakeWord 0.4.x ships its pretrained models (alexa, hey_jarvis,
+    # hey_mycroft, …) as package data and auto-selects ONNX when tflite-runtime
+    # isn't installed — which is exactly our case. Loading with no args brings
+    # them all up; we then trigger only on the configured wake word below.
+    wake = WakeModel()
+    log("wake words available:", list(wake.models.keys()))
     speak("Wall voice is ready.")
     log("listening for the wake word…")
 
@@ -263,7 +255,10 @@ def main():
         while True:
             frame, _ = stream.read(block)
             scores = wake.predict(frame[:, 0])
-            if any(v > 0.5 for v in scores.values()):
+            # fire on the chosen wake word if it's loaded, else on any model
+            chosen = scores.get(WAKE_WORD)
+            fired = chosen > 0.5 if chosen is not None else any(v > 0.5 for v in scores.values())
+            if fired:
                 log("wake!")
                 speak("Yes?")
                 # capture the command
