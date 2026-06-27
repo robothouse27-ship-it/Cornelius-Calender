@@ -60,6 +60,12 @@
   .chip .big{font-family:"Fredoka";font-weight:600;font-size:clamp(20px,2.6vw,30px);}
   .weather .emoji{font-size:26px;}
   .weather .wxImg{height:38px;width:38px;object-fit:contain;display:block;}
+  .wx-chip-txt{display:flex;flex-direction:column;min-width:0;}
+  .wx-chip-top{display:flex;align-items:baseline;gap:8px;}
+  .wx-chip-top #wxLabel{color:var(--ink-soft);font-weight:800;}
+  .wx-chip-quip{white-space:normal;font-weight:800;font-size:13px;line-height:1.15;
+    color:var(--ink-soft);max-width:24ch;margin-top:1px;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
   .clock .ampm{font-size:14px;color:var(--ink-soft);font-weight:700;align-self:flex-end;margin-bottom:5px;}
 
   /* ---- Toolbar (tactile buttons) ---- */
@@ -424,8 +430,10 @@
     <div class="chip weather">
       <img class="wxImg" id="wxImg" src="/icons/ui_temp.png" alt="">
       <span class="emoji" id="wxEmoji" hidden>🌡️</span>
-      <span class="big" id="wxTemp">—</span>
-      <span style="color:var(--ink-soft);font-weight:800" id="wxLabel"></span>
+      <div class="wx-chip-txt">
+        <div class="wx-chip-top"><span class="big" id="wxTemp">—</span><span id="wxLabel"></span></div>
+        <div class="wx-chip-quip" id="wxQuip"></div>
+      </div>
     </div>
     <div class="chip clock">
       <span class="big" id="clockBig">—</span>
@@ -803,6 +811,7 @@ async function loadWeather(){
     $("#wxImg").src='/icons/'+(w.icon||'ui_temp')+'.png';   // sticker, or thermometer fallback
     $("#wxTemp").textContent=w.temp+'°';
     $("#wxLabel").textContent=w.label;
+    $("#wxQuip").textContent=w.quip||'';
     if($("#wxmodal").classList.contains("on")) renderForecast();  // live-refresh if open
   }catch(e){/* leave whatever's showing */}
 }
