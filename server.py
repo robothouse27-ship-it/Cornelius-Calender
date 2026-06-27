@@ -13,6 +13,7 @@ Run:  python3 server.py        # http://0.0.0.0:8080
 """
 import csv
 import hmac
+import html
 import io
 import json
 import os
@@ -575,6 +576,34 @@ def shopping_clear_done():
     return jsonify({"ok": True, "removed": before - len(doc["items"])})
 
 
+@app.route("/api/shopping/clear-all", methods=["POST"])
+def shopping_clear_all():
+    doc = load_shopping()
+    before = len(doc.get("items", []))
+    doc["items"] = []
+    save_shopping(doc)
+    return jsonify({"ok": True, "removed": before})
+
+
+# Export the list: a clean printable page a phone can open over WiFi, plus a QR
+# that points at it. Read-only and LAN-only (same trust model as the wall).
+@app.route("/grocery/list", methods=["GET"])
+def grocery_list_page():
+    doc = load_shopping()
+    return Response(render_grocery_list_page(doc.get("items", [])),
+                    mimetype="text/html")
+
+
+@app.route("/api/grocery-list-qr")
+def grocery_list_qr():
+    url = f"http://{lan_ip()}:{PORT}/grocery/list"
+    img = qrcode.make(url)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return send_file(buf, mimetype="image/png")
+
+
 # --------------------------------------------------------------------------- #
 # grocery photo capture (Stage B): phone snaps a written list → upload → read
 # with Claude vision (or Tesseract) → the wall reviews + commits the items.
@@ -1016,6 +1045,53 @@ def render_grocery_page(token, ok):
       <p class="hint">Tip: lay the list flat, fill the frame, and keep it in good
       light — clearer photos read better.</p>
     """, title="Snap a grocery list")
+
+
+def render_grocery_list_page(items):
+    """A clean, printable copy of the current list — opened on a phone over WiFi
+    (scan the QR on the wall) and AirPrintable straight from the browser."""
+    todo = [it for it in items if not it.get("done")]
+    done = [it for it in items if it.get("done")]
+    if not items:
+        rows = '<li class="empty">The list is empty right now.</li>'
+    else:
+        rows = "".join(
+            f'<li>{html.escape(str(it.get("text", "")))}</li>' for it in todo)
+        if done:
+            rows += "".join(
+                f'<li class="got">{html.escape(str(it.get("text", "")))}</li>'
+                for it in done)
+    n = len(todo)
+    sub = (f"{n} item{'s' if n != 1 else ''} to get"
+           if n else "Everything's checked off 🎉")
+    return _page(f"""
+      <div class="big">🛒</div>
+      <h1>Grocery list</h1>
+      <p class="sub">{sub}</p>
+      <ul class="glist">{rows}</ul>
+      <button onclick="window.print()">🖨️ Print this list</button>
+      <p class="hint">This is a snapshot from the wall. Re-scan the code on the
+      wall to get the latest list.</p>
+      <style>
+        .glist{{list-style:none;padding:0;margin:6px 0 0}}
+        .glist li{{font-size:18px;font-weight:700;padding:13px 6px 13px 34px;
+          border-bottom:1px solid var(--line);position:relative}}
+        .glist li::before{{content:"";position:absolute;left:4px;top:50%;
+          width:18px;height:18px;margin-top:-9px;border:2px solid #C9BEEC;
+          border-radius:6px}}
+        .glist li.got{{color:var(--soft);text-decoration:line-through}}
+        .glist li.got::before{{content:"✓";color:#46D6B4;border-color:#46D6B4;
+          font-weight:900;font-size:13px;text-align:center;line-height:15px;
+          text-decoration:none}}
+        .glist li.empty{{color:var(--soft);padding-left:6px}}
+        .glist li.empty::before{{display:none}}
+        @media print{{
+          body{{background:#fff;padding:0}}
+          .card{{box-shadow:none;margin:0;width:100%}}
+          button,.hint{{display:none}}
+        }}
+      </style>
+    """, title="Grocery list")
 
 
 # --------------------------------------------------------------------------- #

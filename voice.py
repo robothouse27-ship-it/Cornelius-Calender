@@ -28,13 +28,29 @@ import time
 import urllib.request
 from datetime import datetime, timedelta
 
+HERE = os.path.dirname(os.path.abspath(__file__))
 API_BASE = f"http://127.0.0.1:{os.environ.get('FAMILYCAL_PORT', '8080')}"
 WAKE_WORD = os.environ.get("FAMILYCAL_WAKE_WORD", "hey_jarvis")  # an openWakeWord model name
 WHISPER_MODEL = os.environ.get("FAMILYCAL_WHISPER_MODEL", "tiny.en")
-PIPER_VOICE = os.environ.get("PIPER_VOICE", "")                 # path to a .onnx Piper voice
 SAMPLE_RATE = 16000          # what openWakeWord + Whisper expect
 RECORD_SECONDS = 5
 TZ = os.environ.get("FAMILYCAL_TZ", "America/Los_Angeles")
+
+
+def _piper_voice_path():
+    """Explicit PIPER_VOICE wins; else auto-pick a .onnx voice in voices/."""
+    env = os.environ.get("PIPER_VOICE", "").strip()
+    if env:
+        return env
+    vdir = os.path.join(HERE, "voices")
+    if os.path.isdir(vdir):
+        for fn in sorted(os.listdir(vdir)):
+            if fn.endswith(".onnx"):
+                return os.path.join(vdir, fn)
+    return ""
+
+
+PIPER_VOICE = _piper_voice_path()
 
 
 def log(*a):
@@ -168,19 +184,27 @@ def ask_claude(transcript):
 # --------------------------------------------------------------------------- #
 # speech out — Piper if available, else just log (so it's testable headless)
 # --------------------------------------------------------------------------- #
+_piper = None      # lazily-loaded PiperVoice, cached across calls
+
+
 def speak(text):
     log("SAY:", text)
     if not PIPER_VOICE or not os.path.exists(PIPER_VOICE):
-        return
+        return                                    # no voice model → text-only (logged)
+    global _piper
     import subprocess
     import tempfile
+    import wave
     try:
-        wav = tempfile.mktemp(suffix=".wav")
-        subprocess.run(["piper", "--model", PIPER_VOICE, "--output_file", wav],
-                       input=text.encode("utf-8"), check=True)
-        subprocess.run(["aplay", "-q", wav], check=False)
-        os.remove(wav)
-    except (OSError, subprocess.SubprocessError) as e:
+        if _piper is None:
+            from piper import PiperVoice
+            _piper = PiperVoice.load(PIPER_VOICE)
+        wav_path = tempfile.mktemp(suffix=".wav")
+        with wave.open(wav_path, "wb") as wf:
+            _piper.synthesize(text, wf)           # Piper writes a complete WAV
+        subprocess.run(["aplay", "-q", wav_path], check=False)
+        os.remove(wav_path)
+    except Exception as e:                         # never let TTS crash the loop
         log("piper TTS failed:", e)
 
 
@@ -202,8 +226,8 @@ def main():
         from faster_whisper import WhisperModel
         from openwakeword.model import Model as WakeModel
     except ImportError as e:
-        log("voice deps not installed (", e, ") — exiting. "
-            "Run: .venv/bin/pip install -r requirements.txt + apt install libportaudio2")
+        log("voice deps not installed (", e, ") — exiting. Run: "
+            ".venv/bin/pip install -r requirements-voice.txt + sudo apt install libportaudio2")
         return 0
 
     try:
@@ -214,12 +238,22 @@ def main():
         log("couldn't query audio devices (", e, ") — exiting.")
         return 0
 
+    # openWakeWord ships ONNX + tflite model files; download them once (no-op if
+    # already cached) and force the ONNX runtime — tflite-runtime has no wheel
+    # for the wall's Python, so onnx is the path that actually loads here.
+    try:
+        import openwakeword.utils
+        openwakeword.utils.download_models()
+    except Exception as e:
+        log("openwakeword model download skipped:", e)
+
     log("loading models (whisper:", WHISPER_MODEL, "wake:", WAKE_WORD, ")")
     whisper = WhisperModel(WHISPER_MODEL, device="cpu", compute_type="int8")
     try:
-        wake = WakeModel(wakeword_models=[WAKE_WORD])
-    except Exception:
-        wake = WakeModel()                       # fall back to the bundled default models
+        wake = WakeModel(wakeword_models=[WAKE_WORD], inference_framework="onnx")
+    except Exception as e:
+        log("wake model", WAKE_WORD, "failed (", e, ") — loading all default models")
+        wake = WakeModel(inference_framework="onnx")
     speak("Wall voice is ready.")
     log("listening for the wake word…")
 
@@ -241,7 +275,8 @@ def main():
                 reply = handle(text)
                 if reply:
                     speak(reply)
-                wake.reset()                     # avoid an immediate re-trigger
+                if hasattr(wake, "reset"):
+                    wake.reset()                 # avoid an immediate re-trigger
                 time.sleep(0.3)
 
 

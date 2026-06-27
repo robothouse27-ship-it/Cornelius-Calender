@@ -496,6 +496,82 @@
     padding:3px 9px;border-radius:10px;white-space:nowrap;flex:none;}
 
   @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important;}}
+
+  /* ===== grocery row remove + clear-all + export ===== */
+  .grow{display:flex;align-items:center;gap:8px;}
+  .grow .chore{flex:1;min-width:0;}
+  .gro-x{flex:none;width:30px;height:30px;border:0;border-radius:50%;background:var(--rose-soft);
+    color:var(--rose);font-size:17px;font-weight:900;line-height:1;cursor:pointer;
+    display:grid;place-items:center;transition:.15s;}
+  .gro-x:hover{filter:brightness(.96);}
+  .gro-x:active{transform:scale(.9);}
+  .gro-btn.clear{background:var(--rose-soft);color:var(--rose);}
+  .gro-btn.export{background:var(--mint-soft);color:#1f9b80;}
+  .grx-wrap{display:grid;place-items:center;text-align:center;}
+  .grx-wrap img.qr{width:240px;height:240px;border-radius:18px;background:#fff;
+    box-shadow:var(--shadow-soft);padding:10px;}
+  .grx-url{font-weight:800;font-size:14px;color:var(--lav);margin:12px 0 4px;word-break:break-all;}
+  .grx-hint{color:var(--ink-soft);font-weight:700;font-size:13px;margin-bottom:16px;}
+
+  /* ===== styled in-app dialogs (replace native prompt/confirm) ===== */
+  #askbox{position:fixed;inset:0;z-index:240;display:none;align-items:center;justify-content:center;
+    padding:20px;background:rgba(58,51,87,.35);backdrop-filter:blur(4px);}
+  #askbox.on{display:flex;animation:fade .2s ease;}
+  .askcard{background:var(--surface);border-radius:26px;box-shadow:0 26px 70px rgba(80,60,130,.42);
+    width:min(440px,100%);padding:24px;animation:pop .25s cubic-bezier(.2,1.2,.4,1);}
+  .askcard h3{font-family:"Fredoka";font-weight:600;font-size:21px;margin:0 0 6px;}
+  .askcard p.msg{color:var(--ink-soft);font-weight:700;font-size:15px;margin:0 0 16px;line-height:1.4;}
+  .askcard .askrow{display:flex;gap:10px;margin-top:18px;}
+  .askcard .askrow .btn{flex:1;border:0;border-radius:16px;padding:14px;font-family:"Nunito";
+    font-weight:800;font-size:16px;cursor:pointer;background:var(--lav-soft);color:var(--ink);}
+  .askcard .askrow .btn.primary{background:var(--grad-hero);color:#fff;}
+  .askcard .askrow .btn.danger{background:var(--rose);color:#fff;}
+
+  /* ===== on-screen keyboard (touch kiosk, draggable) ===== */
+  #oskbd{position:fixed;z-index:260;display:none;width:min(680px,96vw);
+    background:var(--surface);border-radius:22px;box-shadow:0 24px 64px rgba(80,60,130,.42);
+    padding:8px 10px 12px;user-select:none;touch-action:none;}
+  #oskbd.on{display:block;animation:pop .2s cubic-bezier(.2,1.2,.4,1);}
+  .osk-bar{display:flex;align-items:center;gap:8px;height:26px;cursor:grab;margin-bottom:6px;}
+  .osk-bar:active{cursor:grabbing;}
+  .osk-grip{flex:1;height:6px;border-radius:6px;background:var(--line);}
+  .osk-done{flex:none;border:0;border-radius:11px;background:var(--lav-soft);color:var(--ink);
+    font-family:"Nunito";font-weight:800;font-size:13px;padding:5px 14px;cursor:pointer;}
+  .osk-rows{display:flex;flex-direction:column;gap:7px;}
+  .osk-row{display:flex;gap:6px;justify-content:center;}
+  .osk-key{flex:1;min-width:0;height:50px;border:0;border-radius:13px;background:#F4F1FE;
+    color:var(--ink);font-family:"Nunito";font-weight:800;font-size:19px;cursor:pointer;
+    box-shadow:0 2px 0 rgba(150,110,220,.12);transition:transform .05s,background .12s;}
+  .osk-key:active{transform:translateY(2px);background:var(--lav-soft);box-shadow:none;}
+  .osk-key.wide{flex:1.6;}
+  .osk-key.xwide{flex:5;}
+  .osk-key.fn{background:var(--lav-soft);font-size:15px;font-weight:800;}
+  .osk-key.fn.on{background:var(--lav);color:#fff;}
+  .osk-key.back{background:var(--rose-soft);color:var(--rose);}
+
+  /* ===== unified, prettier text inputs ===== */
+  .field input,.fam-edit input[type=text],.fam-edit input[type=date],.cd-date{
+    transition:border-color .15s, box-shadow .15s, background .15s;}
+  .field input::placeholder,.fam-edit input::placeholder{color:#BDB4D8;font-weight:700;}
+  .field input:focus,.fam-edit input[type=text]:focus,.fam-edit input[type=date]:focus,.cd-date:focus{
+    outline:none;border-color:var(--lav);background:#fff;
+    box-shadow:0 0 0 4px rgba(169,140,255,.18);}
+  .cd-date{border:2px solid var(--line);border-radius:13px;padding:9px 8px;font-family:"Nunito";
+    font-weight:700;font-size:14px;color:var(--ink);background:#FBFAFF;flex:none;width:138px;}
+
+  /* ===== printable grocery list (Print here on the wall) ===== */
+  #printList{display:none;}
+  @media print{
+    body *{visibility:hidden;}
+    #printList,#printList *{visibility:visible;}
+    #printList{display:block;position:absolute;inset:0;padding:30px;background:#fff;color:#000;}
+    #printList h2{font-family:"Fredoka";font-size:30px;margin:0 0 14px;}
+    #printList li{font-size:19px;font-weight:700;padding:11px 4px;border-bottom:1px solid #ddd;
+      list-style:none;}
+    #printList li.got{text-decoration:line-through;color:#888;}
+    #printList ul{padding:0;margin:0;}
+    #oskbd,#askbox{display:none!important;}
+  }
 </style>
 </head>
 <body>
@@ -1488,23 +1564,50 @@ function renderGrocery(){
     empty.textContent="Nothing on the list — add an item or snap a photo.";
     c.appendChild(empty); return;
   }
-  // unbought first (in order), bought sinks to the bottom
+  // unbought first (in order), bought sinks to the bottom. Each row carries a
+  // ✕ to remove that one item; a Clear-all + Export bar sits under the list.
   const ordered=[...grocery].sort((a,b)=>(a.done?1:0)-(b.done?1:0));
   ordered.forEach(it=>{
+    const wrap=document.createElement("div"); wrap.className="grow";
     const row=document.createElement("div");row.className="chore"+(it.done?" done":"");
     row.innerHTML=`<div class="check">✓</div><div class="label"></div>`;
     row.querySelector(".label").textContent=it.text;
     row.querySelector(".check").addEventListener("click",e=>{e.stopPropagation();groceryToggle(it);});
-    c.appendChild(row);
+    const x=document.createElement("button"); x.className="gro-x"; x.title="Remove";
+    x.textContent="✕";
+    x.addEventListener("click",e=>{e.stopPropagation();groceryRemove(it);});
+    wrap.appendChild(row); wrap.appendChild(x);
+    c.appendChild(wrap);
   });
   const left=grocery.filter(it=>!it.done).length;
   const foot=document.createElement("div");
-  foot.style.cssText="text-align:center;font-weight:800;color:var(--lav);margin-top:6px;font-size:15px;";
+  foot.style.cssText="text-align:center;font-weight:800;color:var(--lav);margin:6px 0 8px;font-size:15px;";
   foot.textContent=left?`🛒 ${left} to get`:`✓ all done!`;
   c.appendChild(foot);
+  // bottom action bar: export/share + clear all
+  const tools=document.createElement("div"); tools.className="grocery-bar";
+  tools.innerHTML=`<button class="gro-btn export" id="groExport">📤 Export</button>
+    <button class="gro-btn clear" id="groClear">🗑️ Clear all</button>`;
+  tools.querySelector("#groExport").addEventListener("click",e=>{e.stopPropagation();openGroceryExport();});
+  tools.querySelector("#groClear").addEventListener("click",e=>{e.stopPropagation();groceryClearAll();});
+  c.appendChild(tools);
+}
+function groceryRemove(it){
+  pop();
+  const i=grocery.findIndex(g=>g.id===it.id);
+  if(i>=0) grocery.splice(i,1);
+  renderGrocery(); renderGroceryEditor();
+  postJSON('/api/shopping/delete',{id:it.id});
+}
+async function groceryClearAll(){
+  if(!grocery.length) return;
+  if(!(await confirmBox("Remove every item from the grocery list? This can't be undone.",
+        {title:"Clear the whole list?",okLabel:"Clear all",danger:true}))) return;
+  grocery=[]; renderGrocery(); renderGroceryEditor(); pop();
+  try{ await fetch('/api/shopping/clear-all',{method:'POST'}); }catch(e){/* offline */}
 }
 async function addGroceryPrompt(){
-  const text=(prompt("Add to the grocery list (e.g. Milk)")||"").trim();
+  const text=(await askText({title:"Add to the list 🛒",placeholder:"e.g. Milk"})||"").trim();
   if(!text) return;
   try{
     const r=await fetch('/api/shopping/add',{method:'POST',
@@ -1918,9 +2021,10 @@ function renderFeedEditor(){
       f.enabled = f.enabled===false; pop();            // toggle
       renderFeedEditor(); patchFeed(f.id,{enabled:f.enabled});
     });
-    del.addEventListener("click",()=>{
+    del.addEventListener("click",async()=>{
       pop();
-      if(!confirm(`Delete the “${f.name}” calendar? Its events will be removed from the wall.`)) return;
+      if(!(await confirmBox(`Its events will be removed from the wall.`,
+            {title:`Delete the “${f.name}” calendar?`,okLabel:"Delete",danger:true}))) return;
       FEED_LIST.splice(i,1);                            // optimistic
       events=events.filter(e=>e.local || e.feedName!==f.name);
       FAMILY=familyFromFeeds(); renderFeedEditor(); liveRefresh();
@@ -1958,9 +2062,10 @@ function renderPeopleEditor(){
     col.addEventListener("change",()=>{ p.color=col.value; FAMILY=familyFromFeeds(); renderCalendar();renderAgenda(); patchPerson(p.id,{color:p.color}); });
     ava.addEventListener("change",()=>{ p.avatar=ava.value.trim()||p.avatar; FAMILY=familyFromFeeds(); patchPerson(p.id,{avatar:p.avatar}); });
     name.addEventListener("change",()=>{ p.name=name.value.trim()||p.name; FAMILY=familyFromFeeds(); renderFeedEditor(); patchPerson(p.id,{name:p.name}); });
-    del.addEventListener("click",()=>{
+    del.addEventListener("click",async()=>{
       pop();
-      if(!confirm(`Remove “${p.name}”? Their calendars stay on the wall but become unassigned.`)) return;
+      if(!(await confirmBox(`Their calendars stay on the wall but become unassigned.`,
+            {title:`Remove “${p.name}”?`,okLabel:"Remove",danger:true}))) return;
       PEOPLE.splice(i,1); FAMILY=familyFromFeeds();
       renderPeopleEditor(); renderFeedEditor();
       fetch('/api/people/delete',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -1971,7 +2076,7 @@ function renderPeopleEditor(){
   });
 }
 async function addPerson(){
-  const name=(prompt("New person's name?")||"").trim();
+  const name=(await askText({title:"New person 🙂",placeholder:"e.g. Mom"})||"").trim();
   if(!name) return;
   try{
     const r=await fetch('/api/people/add',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -2014,7 +2119,7 @@ function postJSON(url,body){
     body:JSON.stringify(body)}).catch(()=>{});
 }
 async function addChore(){
-  const label=(prompt("New chore? (e.g. Take out trash)")||"").trim();
+  const label=(await askText({title:"New chore 🧹",placeholder:"e.g. Take out the trash"})||"").trim();
   if(!label) return;
   try{
     const r=await fetch('/api/chores/add',{method:'POST',
@@ -2038,7 +2143,7 @@ function renderCountdownEditor(){
     const row=document.createElement("div");row.className="fam-edit";
     row.innerHTML=`<input class="ava" type="text" value="${cd.emoji}" maxlength="4" title="Emoji">
       <input type="text" value="${cd.label.replace(/"/g,'&quot;')}" maxlength="30">
-      <input type="date" value="${cd.date}" style="flex:none;width:138px;border:2px solid var(--line);border-radius:13px;padding:9px 8px;font-family:'Nunito';font-weight:700;font-size:14px;color:var(--ink);background:#FBFAFF;">
+      <input type="date" class="cd-date" value="${cd.date}">
       <button class="del" title="Remove"><img class="ctrlIcon" src="/icons/ui_delete.png" alt="Remove"></button>`;
     const emoji=row.querySelector("input.ava");
     const label=row.querySelector('input[type=text]:not(.ava)');
@@ -2262,7 +2367,8 @@ $("#addGroceryPhoto").addEventListener("click",()=>{pop();openGroceryQr();});
 $("#clearGroceryDone").addEventListener("click",async()=>{
   pop();
   if(!grocery.some(it=>it.done)){ return; }
-  if(!confirm("Remove all bought items from the list?")) return;
+  if(!(await confirmBox("Remove all bought (checked-off) items from the list?",
+        {title:"Clear bought items?",okLabel:"Clear bought"}))) return;
   try{ await fetch('/api/shopping/clear-done',{method:'POST'}); }catch(e){/* offline */}
   await loadShopping(); renderGrocery(); renderGroceryEditor();
 });
@@ -2396,7 +2502,8 @@ $("#wxClose").addEventListener("click",closeForecast);
 $("#wxmodal").addEventListener("click",e=>{if(e.target.id==="wxmodal")closeForecast();});
 $("#feedRotate").addEventListener("click",async()=>{
   pop();
-  if(!confirm("Make a new link? Phones already subscribed will stop updating until they re-scan."))return;
+  if(!(await confirmBox("Phones already subscribed will stop updating until they re-scan.",
+        {title:"Make a new link?",okLabel:"New link",danger:true})))return;
   try{ await fetch('/api/feed/rotate',{method:'POST'}); openFeedFlow(); }catch(e){}
 });
 
@@ -2492,13 +2599,243 @@ async function checkUpdate(){
     const {v} = await r.json();
     if(!v) return;
     if(appVersion === null){ appVersion = v; return; }   // first read = baseline
-    if(v !== appVersion && !$("#modal").classList.contains("on")){
+    const busy = $("#modal").classList.contains("on")
+      || ($("#askbox")&&$("#askbox").classList.contains("on"))
+      || ($("#oskbd")&&$("#oskbd").classList.contains("on"));
+    if(v !== appVersion && !busy){
       location.reload();
     }
   }catch(e){/* offline — try again next tick */}
 }
 checkUpdate();
 setInterval(checkUpdate, 2*60*1000);   // check for new code every 2 min
+
+/* ============================================================
+   STYLED IN-APP DIALOGS  (replace native prompt/confirm so the
+   on-screen keyboard can attach and nothing looks out of place).
+   askText → Promise<string|null>;  confirmBox → Promise<bool>.
+   ============================================================ */
+function _askEnsure(){
+  let b=$("#askbox");
+  if(!b){ b=document.createElement("div"); b.id="askbox"; document.body.appendChild(b); }
+  return b;
+}
+function askText({title="Add",placeholder="",value="",okLabel="Add"}={}){
+  return new Promise(res=>{
+    const b=_askEnsure();
+    b.innerHTML=`<div class="askcard"><h3></h3>
+      <div class="field"><input type="text" autocomplete="off" autocorrect="off"></div>
+      <div class="askrow">
+        <button class="btn" data-act="cancel">Cancel</button>
+        <button class="btn primary" data-act="ok"></button>
+      </div></div>`;
+    b.querySelector("h3").textContent=title;
+    const inp=b.querySelector("input");
+    inp.placeholder=placeholder; inp.value=value;
+    b.querySelector('[data-act=ok]').textContent=okLabel;
+    function close(val){ b.classList.remove("on"); b.onclick=null; oskHide(); res(val); }
+    b.querySelector('[data-act=cancel]').onclick=()=>close(null);
+    b.querySelector('[data-act=ok]').onclick=()=>close(inp.value.trim()||null);
+    inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); close(inp.value.trim()||null); } });
+    b.onclick=e=>{ if(e.target===b) close(null); };
+    b.classList.add("on");
+    setTimeout(()=>inp.focus(),60);   // focus → on-screen keyboard pops up
+  });
+}
+function confirmBox(message,{title="Are you sure?",okLabel="Yes",danger=false}={}){
+  return new Promise(res=>{
+    const b=_askEnsure();
+    b.innerHTML=`<div class="askcard"><h3></h3><p class="msg"></p>
+      <div class="askrow">
+        <button class="btn" data-act="cancel">Cancel</button>
+        <button class="btn ${danger?'danger':'primary'}" data-act="ok"></button>
+      </div></div>`;
+    b.querySelector("h3").textContent=title;
+    b.querySelector(".msg").textContent=message;
+    b.querySelector('[data-act=ok]').textContent=okLabel;
+    function close(val){ b.classList.remove("on"); b.onclick=null; res(val); }
+    b.querySelector('[data-act=cancel]').onclick=()=>close(false);
+    b.querySelector('[data-act=ok]').onclick=()=>close(true);
+    b.onclick=e=>{ if(e.target===b) close(false); };
+    b.classList.add("on");
+  });
+}
+
+/* ============================================================
+   GROCERY EXPORT — share to a phone over WiFi (QR → printable
+   page) or print straight from the wall.
+   ============================================================ */
+function buildPrintList(){
+  let p=$("#printList");
+  if(!p){ p=document.createElement("div"); p.id="printList"; document.body.appendChild(p); }
+  const todo=grocery.filter(it=>!it.done), done=grocery.filter(it=>it.done);
+  const li=arr=>arr.map(it=>`<li class="${it.done?'got':''}">${ffEsc(it.text)}</li>`).join("");
+  p.innerHTML=`<h2>🛒 Grocery list</h2><ul>${(li(todo)+li(done))||'<li>(empty)</li>'}</ul>`;
+}
+async function openGroceryExport(){
+  const b=_askEnsure();
+  b.innerHTML=`<div class="askcard"><h3>📤 Share the list</h3>
+    <div class="grx-wrap">
+      <img class="qr" src="/api/grocery-list-qr?_=${Date.now()}" alt="QR code">
+      <div class="grx-url">scan to open on a phone…</div>
+      <div class="grx-hint">Scan with a phone on the same WiFi to open &amp; print the list.</div>
+    </div>
+    <div class="askrow">
+      <button class="btn" data-act="cancel">Close</button>
+      <button class="btn primary" data-act="print">🖨️ Print here</button>
+    </div></div>`;
+  function close(){ b.classList.remove("on"); b.onclick=null; }
+  b.querySelector('[data-act=cancel]').onclick=close;
+  b.querySelector('[data-act=print]').onclick=()=>{ buildPrintList(); window.print(); };
+  b.onclick=e=>{ if(e.target===b) close(); };
+  b.classList.add("on");
+  // show the real LAN address (phones can't use localhost)
+  try{
+    const r=await fetch('/api/info?_='+Date.now()); const j=await r.json();
+    const u=`http://${j.lan_ip}:${j.port}/grocery/list`;
+    const el=b.querySelector(".grx-url"); if(el) el.textContent=u;
+  }catch(e){/* offline — QR still encodes the right URL */}
+}
+
+/* ============================================================
+   ON-SCREEN KEYBOARD — a cute, draggable touch keyboard that
+   pops up whenever a typeable field is focused (the wall has no
+   physical keyboard). Types into the focused input via the caret.
+   ============================================================ */
+const OSK_LETTERS=[["q","w","e","r","t","y","u","i","o","p"],
+  ["a","s","d","f","g","h","j","k","l"],["z","x","c","v","b","n","m"]];
+const OSK_NUMS=[["1","2","3","4","5","6","7","8","9","0"],
+  ["-","/",":",";","(",")","$","&","@"],[".",",","?","!","'","\""]];
+let oskTarget=null, oskShift=false, oskMode="abc";
+function oskTypeable(el){
+  if(!el || !el.tagName) return false;
+  if(el.tagName==="TEXTAREA") return true;
+  if(el.tagName!=="INPUT") return false;
+  if(el.classList.contains("ava")) return false;          // emoji-only fields
+  const t=(el.getAttribute("type")||"text").toLowerCase();
+  return ["text","number","search","tel","url",""].includes(t);
+}
+function oskBuild(){
+  let k=$("#oskbd"); if(k) return k;
+  k=document.createElement("div"); k.id="oskbd";
+  k.innerHTML=`<div class="osk-bar"><div class="osk-grip"></div>
+      <button class="osk-done">Done ▾</button></div><div class="osk-rows"></div>`;
+  document.body.appendChild(k);
+  k.querySelector(".osk-done").addEventListener("pointerdown",e=>{
+    e.preventDefault(); if(oskTarget) oskTarget.blur(); oskHide();
+  });
+  oskDragSetup(k); oskRender();
+  return k;
+}
+function oskRender(){
+  const rows=$("#oskbd .osk-rows"); if(!rows) return; rows.innerHTML="";
+  const layout = oskMode==="abc"?OSK_LETTERS:OSK_NUMS;
+  layout.forEach((keys,ri)=>{
+    const row=document.createElement("div"); row.className="osk-row";
+    if(oskMode==="abc" && ri===2){
+      const sh=document.createElement("button");
+      sh.className="osk-key fn wide"+(oskShift?" on":""); sh.textContent="⇧";
+      sh.dataset.fn="shift"; row.appendChild(sh);
+    }
+    keys.forEach(c=>{
+      const btn=document.createElement("button"); btn.className="osk-key";
+      btn.textContent=(oskMode==="abc"&&oskShift)?c.toUpperCase():c;
+      btn.dataset.char=btn.textContent; row.appendChild(btn);
+    });
+    if(oskMode==="abc" && ri===2){
+      const bk=document.createElement("button");
+      bk.className="osk-key fn wide back"; bk.textContent="⌫"; bk.dataset.fn="back";
+      row.appendChild(bk);
+    }
+    rows.appendChild(row);
+  });
+  const bottom=document.createElement("div"); bottom.className="osk-row";
+  const mode=document.createElement("button");
+  mode.className="osk-key fn"; mode.textContent=oskMode==="abc"?"123":"ABC"; mode.dataset.fn="mode";
+  const space=document.createElement("button");
+  space.className="osk-key xwide"; space.textContent="space"; space.dataset.char=" ";
+  bottom.appendChild(mode); bottom.appendChild(space);
+  if(oskMode!=="abc"){
+    const bk=document.createElement("button");
+    bk.className="osk-key fn back"; bk.textContent="⌫"; bk.dataset.fn="back"; bottom.appendChild(bk);
+  }
+  const ent=document.createElement("button");
+  ent.className="osk-key fn wide"; ent.textContent="return"; ent.dataset.fn="enter"; bottom.appendChild(ent);
+  rows.appendChild(bottom);
+}
+function oskInsert(text){
+  const el=oskTarget; if(!el) return;
+  try{
+    const s=el.selectionStart;
+    if(s!=null && el.setRangeText){ el.setRangeText(text,s,el.selectionEnd,"end"); }
+    else throw 0;
+  }catch(_){ el.value=(el.value||"")+text; }
+  el.dispatchEvent(new Event("input",{bubbles:true}));
+}
+function oskBackspace(){
+  const el=oskTarget; if(!el) return;
+  try{
+    const s=el.selectionStart, e=el.selectionEnd;
+    if(s==null) throw 0;
+    if(s===e && s>0) el.setRangeText("",s-1,s,"end");
+    else if(s!==e) el.setRangeText("",s,e,"end");
+  }catch(_){ el.value=(el.value||"").slice(0,-1); }
+  el.dispatchEvent(new Event("input",{bubbles:true}));
+}
+function oskEnter(){
+  const el=oskTarget; if(!el) return;
+  el.dispatchEvent(new KeyboardEvent("keydown",{key:"Enter",bubbles:true}));
+}
+/* one delegated handler; pointerdown + preventDefault keeps the field focused */
+document.addEventListener("pointerdown",function(e){
+  const key=e.target.closest && e.target.closest(".osk-key");
+  if(!key) return;
+  e.preventDefault();
+  if(key.dataset.fn){
+    const fn=key.dataset.fn;
+    if(fn==="back") oskBackspace();
+    else if(fn==="shift"){ oskShift=!oskShift; oskRender(); }
+    else if(fn==="mode"){ oskMode=oskMode==="abc"?"num":"abc"; oskShift=false; oskRender(); }
+    else if(fn==="enter") oskEnter();
+  }else if(key.dataset.char!=null){
+    oskInsert(key.dataset.char);
+    if(oskShift && oskMode==="abc"){ oskShift=false; oskRender(); }   // one-shot shift
+  }
+},true);
+function oskMove(k,left,top){
+  const w=k.offsetWidth,h=k.offsetHeight;
+  left=Math.max(4,Math.min(left, innerWidth-w-4));
+  top=Math.max(4,Math.min(top, innerHeight-h-4));
+  k.style.transform="none";
+  k.style.left=left+"px"; k.style.top=top+"px"; k.style.right="auto"; k.style.bottom="auto";
+}
+function oskPlace(k){
+  const pos=store.get('osk_pos',null);
+  if(pos){ oskMove(k,pos.left,pos.top); }
+  else{ k.style.left="50%"; k.style.right="auto"; k.style.top="auto";
+        k.style.bottom="18px"; k.style.transform="translateX(-50%)"; }
+}
+function oskDragSetup(k){
+  const bar=k.querySelector(".osk-bar"); let dx=0,dy=0,drag=false;
+  bar.addEventListener("pointerdown",e=>{
+    if(e.target.closest(".osk-done")) return;
+    drag=true; const r=k.getBoundingClientRect(); dx=e.clientX-r.left; dy=e.clientY-r.top;
+    try{ bar.setPointerCapture(e.pointerId); }catch(_){}
+  });
+  bar.addEventListener("pointermove",e=>{ if(drag) oskMove(k,e.clientX-dx,e.clientY-dy); });
+  bar.addEventListener("pointerup",()=>{ if(!drag) return; drag=false;
+    store.set('osk_pos',{left:k.offsetLeft, top:k.offsetTop}); });
+}
+function oskShow(target){
+  const k=oskBuild(); oskTarget=target;
+  oskMode=(target.getAttribute && (target.getAttribute("type")||"").toLowerCase()==="number")?"num":"abc";
+  oskShift=false; oskRender(); oskPlace(k); k.classList.add("on");
+}
+function oskHide(){ const k=$("#oskbd"); if(k) k.classList.remove("on"); oskTarget=null; }
+document.addEventListener("focusin",e=>{ if(oskTypeable(e.target)) oskShow(e.target); });
+document.addEventListener("focusout",()=>{
+  setTimeout(()=>{ if(!oskTypeable(document.activeElement)) oskHide(); },150);
+});
 </script>
 </body>
 </html>

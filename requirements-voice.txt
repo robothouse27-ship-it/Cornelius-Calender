@@ -2,10 +2,14 @@
 # Install only on a box with a working mic + audio libs:
 #     sudo apt install -y libportaudio2
 #     .venv/bin/pip install -r requirements-voice.txt
-# openwakeword pulls tflite-runtime, which has no wheel for some Python/CPU
-# combos — that's why these are split out of the core requirements.txt so the
-# grocery + photo features always install cleanly.
+#
+# openwakeword >=0.6 hard-requires tflite-runtime, which has no wheel for many
+# Python/CPU combos (incl. the wall's Python 3.12). Pinning <0.6 + onnxruntime
+# uses the ONNX inference path instead, which has wheels everywhere. These are
+# split out of the core requirements.txt so the grocery + photo features always
+# install cleanly even when the voice stack doesn't.
+onnxruntime>=1.17
+openwakeword<0.6
 faster-whisper>=1.0
-openwakeword>=0.6
 sounddevice>=0.4
 piper-tts>=1.2
