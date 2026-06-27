@@ -4,3 +4,15 @@ icalendar>=5.0
 recurring-ical-events>=2.2
 tzdata>=2024.1
 qrcode[pil]>=7.4
+
+# Photo capture → list reading (Stage B). Pillow ships with qrcode[pil] above;
+# anthropic powers the cloud vision read, pytesseract is the free on-box fallback.
+anthropic>=0.40
+Pillow>=10
+pytesseract>=0.3
+
+# Local voice control (Stage C) — CPU-only, tiny models on the wall's 2 cores.
+faster-whisper>=1.0
+openwakeword>=0.6
+sounddevice>=0.4
+piper-tts>=1.2

@@ -263,6 +263,12 @@
   .chore-person:first-child{margin-top:0;}
   .chore-person .who{display:inline-block;font-weight:800;font-size:12.5px;padding:4px 11px;border-radius:11px;color:#fff;}
   .chore-person + .chore{margin-left:6px;}
+  /* grocery widget: an add/photo action bar above the list rows */
+  .grocery-bar{display:flex;gap:8px;margin-bottom:10px;}
+  .gro-btn{flex:1;border:0;border-radius:13px;padding:10px 8px;font-family:"Nunito";font-weight:800;
+    font-size:14px;color:var(--ink);background:var(--lav-soft);cursor:pointer;transition:.15s;}
+  .gro-btn:hover{filter:brightness(.97);}
+  .rail .widget.tile .grocery-bar{display:none;}   /* tile view: keep it clean, tap to focus */
 
   /* First Five — kids' morning routine */
   #w-firstfive .w-body{padding-top:4px;}
@@ -377,8 +383,8 @@
   .sleep-hint{position:absolute;bottom:34px;left:0;right:0;text-align:center;color:#fff;opacity:.7;font-weight:700;z-index:2;}
 
   /* ===================== MODAL ===================== */
-  #modal,#settings,#qrmodal,#feedmodal,#chqrmodal,#wxmodal{position:fixed;inset:0;background:rgba(58,51,87,.35);backdrop-filter:blur(4px);z-index:120;display:none;align-items:center;justify-content:center;padding:20px;}
-  #modal.on,#settings.on,#qrmodal.on,#feedmodal.on,#chqrmodal.on,#wxmodal.on{display:flex;animation:fade .25s ease;}
+  #modal,#settings,#qrmodal,#feedmodal,#chqrmodal,#grqrmodal,#groceryReview,#wxmodal{position:fixed;inset:0;background:rgba(58,51,87,.35);backdrop-filter:blur(4px);z-index:120;display:none;align-items:center;justify-content:center;padding:20px;}
+  #modal.on,#settings.on,#qrmodal.on,#feedmodal.on,#chqrmodal.on,#grqrmodal.on,#groceryReview.on,#wxmodal.on{display:flex;animation:fade .25s ease;}
   .chip.weather{cursor:pointer;}
   .wx-today{display:flex;align-items:center;gap:14px;background:var(--grad-hero);color:#fff;border-radius:22px;padding:16px 18px;margin-bottom:16px;}
   .wx-today img{height:54px;width:54px;object-fit:contain;flex:none;}
@@ -565,10 +571,10 @@
       <span class="w-title"><img class="hicon" src="/icons/ui_chores.png" alt="">Chores</span></header>
     <div class="w-body"><div id="chores"></div></div>
   </section>
-  <section class="widget card" id="w-family" data-w="family">
+  <section class="widget card" id="w-grocery" data-w="grocery">
     <header class="w-head"><span class="w-grip" aria-hidden="true">⠿</span>
-      <span class="w-title"><img class="hicon" src="/icons/ui_family.png" alt="">Family</span></header>
-    <div class="w-body"><div class="fam" id="fam"></div></div>
+      <span class="w-title"><span class="hemoji">🛒</span>Groceries</span></header>
+    <div class="w-body"><div id="grocery"></div></div>
   </section>
   <section class="widget card" id="w-countdowns" data-w="countdowns">
     <header class="w-head"><span class="w-grip" aria-hidden="true">⠿</span>
@@ -627,6 +633,7 @@
         <button class="set-tab active" data-tab="appearance"><span>🎨</span> Appearance</button>
         <button class="set-tab" data-tab="people"><span>🙂</span> People</button>
         <button class="set-tab" data-tab="chores"><span>🧹</span> Chores</button>
+        <button class="set-tab" data-tab="groceries"><span>🛒</span> Groceries</button>
         <button class="set-tab" data-tab="countdowns"><span>⏳</span> Countdowns</button>
         <button class="set-tab" data-tab="firstfive"><span>🌅</span> First Five</button>
         <button class="set-tab" data-tab="calendars"><span>📅</span> Calendars</button>
@@ -650,6 +657,16 @@
           <div class="set-actions">
             <button class="btn" id="addChore">🧹 Add a chore</button>
             <button class="btn primary" id="addChorePhone">📲 Add by phone</button>
+          </div>
+        </section>
+        <section class="set-panel" data-panel="groceries">
+          <h3>Groceries</h3>
+          <p class="set-hint">One shared family list. Add here or from a phone — checking an item off clears it on every device.</p>
+          <div id="groceryEditor"></div>
+          <div class="set-actions">
+            <button class="btn" id="addGrocery">🛒 Add an item</button>
+            <button class="btn primary" id="addGroceryPhoto">📷 Add by photo</button>
+            <button class="btn" id="clearGroceryDone">🧹 Clear bought</button>
           </div>
         </section>
         <section class="set-panel" data-panel="countdowns">
@@ -707,6 +724,39 @@
       <div id="chqrStatus" style="margin-top:10px;font-weight:800;color:var(--lav)">opening…</div>
     </div>
     <div class="sheet-actions"><button class="btn" id="chqrClose">Close</button></div>
+  </div>
+</div>
+
+<!-- ADD-GROCERY-BY-PHOTO QR MODAL -->
+<div id="grqrmodal">
+  <div class="sheet">
+    <h2>Add by photo 📷</h2>
+    <p style="color:var(--ink-soft);font-weight:700;margin:-6px 0 16px;font-size:14px">
+      Scan with your phone, snap a written or printed list, and confirm it here.</p>
+    <div style="text-align:center">
+      <img id="grqrImg" alt="QR code" width="240" height="240"
+           style="border-radius:18px;background:#fff;box-shadow:var(--shadow-soft)">
+      <div id="grqrUrl" style="margin-top:12px;font-weight:800;font-size:13px;color:var(--ink-soft);word-break:break-all"></div>
+      <div id="grqrStatus" style="margin-top:10px;font-weight:800;color:var(--lav)">opening…</div>
+    </div>
+    <div class="sheet-actions"><button class="btn" id="grqrClose">Close</button></div>
+  </div>
+</div>
+
+<!-- GROCERY PHOTO REVIEW MODAL (confirm the items read from the photo) -->
+<div id="groceryReview">
+  <div class="sheet">
+    <h2>Confirm your list ✅</h2>
+    <p id="grReviewSub" style="color:var(--ink-soft);font-weight:700;margin:-6px 0 14px;font-size:14px">
+      We read these items — fix any text, drop what you don't want, then add them.</p>
+    <div id="grReviewRows" style="max-height:46vh;overflow:auto"></div>
+    <button class="btn" id="grReviewAdd2" style="margin-top:10px">＋ Add a line</button>
+    <div class="sheet-actions" style="justify-content:space-between;margin-top:16px">
+      <button class="btn" id="grReviewBetter" title="Re-read with the cloud reader" style="font-size:13px;color:var(--ink-soft);display:none">✨ Read better</button>
+      <span style="flex:1"></span>
+      <button class="btn" id="grReviewDismiss" style="font-size:14px">Discard</button>
+      <button class="btn primary" id="grReviewCommit">Add to list</button>
+    </div>
   </div>
 </div>
 
@@ -951,7 +1001,7 @@ async function syncNow(){
     if(lastSync && lastSync.getTime()>before){ fresh=true; break; }
     tag.textContent='syncing…';               // hold the label while we wait
   }
-  if(fresh){ renderCalendar(); renderAgenda(); renderFamily(); pop(true); }
+  if(fresh){ renderCalendar(); renderAgenda(); pop(true); }
   btn.classList.remove("spin"); btn.disabled=false; syncing=false;
   updateSync();
 }
@@ -1116,7 +1166,7 @@ function evChip(e){ // compact chip (month/week)
    DASHBOARD  — one big focus widget + a rail of tappable, draggable
    tiles. State {focus, order} persists so it survives a reboot.
    ============================================================ */
-const WIDGETS=['calendar','today','chores','family','countdowns','firstfive'];
+const WIDGETS=['calendar','today','chores','grocery','countdowns','firstfive'];
 let layout=store.get('layout',{focus:'calendar',order:['firstfive','today','chores','family','countdowns']});
 function saveLayout(){ store.set('layout',layout); }
 function widgetEl(w){ return document.getElementById('w-'+w); }
@@ -1402,27 +1452,67 @@ function renderChores(){
   c.appendChild(star);
 }
 
-/* "Who's home today" strip: each person + their next event today, or "free".
-   Groups today's events by owner (whoKey) — directly on the Phase 2 model. */
-function renderFamily(){
-  const f=$("#fam"); f.innerHTML="";
-  const byWho={};
-  events.filter(e=>e.date===TODAY_KEY).forEach(e=>{
-    if(!e.whoKey) return;                                   // box-local adds: skip
-    (byWho[e.whoKey]=byWho[e.whoKey]||[]).push(e);
+/* ============================================================
+   GROCERIES — one shared family list, stored on the box
+   (data/shopping.json). "Done" is a server-side boolean, so
+   checking milk on the wall clears it on a phone too. Tap a row
+   to toggle bought; bought items grey out and sink to the bottom.
+   ============================================================ */
+let grocery = [];   // {id,text,done} from /api/shopping
+async function loadShopping(){
+  try{
+    const r=await fetch('/api/shopping?_='+Date.now(),{cache:'no-store'});
+    const j=await r.json();
+    grocery=(j.items||[]).map(it=>({id:it.id,text:it.text,done:!!it.done}));
+  }catch(e){/* offline → keep whatever we had */}
+}
+function groceryToggle(it){
+  it.done=!it.done; renderGrocery();
+  postJSON('/api/shopping/update',{id:it.id,done:it.done});
+  if(it.done){ pop(true); }
+}
+function renderGrocery(){
+  const c=$("#grocery"); if(!c) return; c.innerHTML="";
+  // header actions: type-to-add + add-by-photo (work from the focused widget)
+  const bar=document.createElement("div");
+  bar.className="grocery-bar";
+  bar.innerHTML=`<button class="gro-btn" id="groAdd">＋ Add item</button>
+    <button class="gro-btn" id="groPhoto">📷 Add by photo</button>`;
+  c.appendChild(bar);
+  bar.querySelector("#groAdd").addEventListener("click",e=>{e.stopPropagation();addGroceryPrompt();});
+  bar.querySelector("#groPhoto").addEventListener("click",e=>{e.stopPropagation();openGroceryQr();});
+
+  if(!grocery.length){
+    const empty=document.createElement("div");
+    empty.className="empty"; empty.style.cssText="padding:14px 6px";
+    empty.textContent="Nothing on the list — add an item or snap a photo.";
+    c.appendChild(empty); return;
+  }
+  // unbought first (in order), bought sinks to the bottom
+  const ordered=[...grocery].sort((a,b)=>(a.done?1:0)-(b.done?1:0));
+  ordered.forEach(it=>{
+    const row=document.createElement("div");row.className="chore"+(it.done?" done":"");
+    row.innerHTML=`<div class="check">✓</div><div class="label"></div>`;
+    row.querySelector(".label").textContent=it.text;
+    row.querySelector(".check").addEventListener("click",e=>{e.stopPropagation();groceryToggle(it);});
+    c.appendChild(row);
   });
-  FAMILY.forEach(p=>{
-    const mine=(byWho[p.key]||[]).sort((a,b)=>minsOf(a.time)-minsOf(b.time));
-    const el=document.createElement("div");
-    el.className="pill"+(mine.length?"":" free");
-    const ava = p.avatar ? `${p.avatar} ` : "";
-    const tail = mine.length
-      ? `<span class="who-next">${mine[0].time==='All day'?'all day':mine[0].time}${mine.length>1?` +${mine.length-1}`:''}</span>`
-      : `<span class="who-free">free</span>`;
-    el.innerHTML=`<span class="dot" style="background:${p.color}"></span>${ava}${p.name}${tail}`;
-    el.title = mine.length ? mine.map(e=>`${e.time} · ${e.title}`).join("\n") : "No events today";
-    f.appendChild(el);
-  });
+  const left=grocery.filter(it=>!it.done).length;
+  const foot=document.createElement("div");
+  foot.style.cssText="text-align:center;font-weight:800;color:var(--lav);margin-top:6px;font-size:15px;";
+  foot.textContent=left?`🛒 ${left} to get`:`✓ all done!`;
+  c.appendChild(foot);
+}
+async function addGroceryPrompt(){
+  const text=(prompt("Add to the grocery list (e.g. Milk)")||"").trim();
+  if(!text) return;
+  try{
+    const r=await fetch('/api/shopping/add',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+    const j=await r.json();
+    if(j.ok){ grocery.push({id:j.item.id,text:j.item.text,done:false});
+      renderGrocery(); renderGroceryEditor(); pop(true); }
+  }catch(e){/* offline */}
 }
 
 /* ============================================================
@@ -1767,7 +1857,7 @@ $("#soundBtn").addEventListener("click",()=>{soundOn=!soundOn;store.set('sound',
    ============================================================ */
 function liveRefresh(){
   if(pickFam>=FAMILY.length)pickFam=0;
-  renderCalendar();renderAgenda();renderChores();renderFamily();renderCountdowns();renderFirstFive();
+  renderCalendar();renderAgenda();renderChores();renderGrocery();renderCountdowns();renderFirstFive();
   if($("#modal").classList.contains("on"))buildSwatches();
 }
 function renderThemePicker(){
@@ -1817,12 +1907,12 @@ function renderFeedEditor(){
     });
     col.addEventListener("input",()=>{                 // live recolor on the wall
       f.color=col.value; FAMILY=familyFromFeeds();
-      recolorEvents(f.name,col.value); renderCalendar();renderAgenda();renderFamily();
+      recolorEvents(f.name,col.value); renderCalendar();renderAgenda();
     });
     col.addEventListener("change",()=>patchFeed(f.id,{color:f.color}));
     name.addEventListener("change",()=>{
       f.name=name.value.trim()||f.name; FAMILY=familyFromFeeds();
-      renderFamily(); patchFeed(f.id,{name:f.name});
+      patchFeed(f.id,{name:f.name});
     });
     eye.addEventListener("click",()=>{
       f.enabled = f.enabled===false; pop();            // toggle
@@ -1865,14 +1955,14 @@ function renderPeopleEditor(){
     const ava=row.querySelector('input.ava');
     const name=row.querySelector('input[type=text]:not(.ava)');
     const del=row.querySelector('.del');
-    col.addEventListener("change",()=>{ p.color=col.value; FAMILY=familyFromFeeds(); renderFamily(); patchPerson(p.id,{color:p.color}); });
-    ava.addEventListener("change",()=>{ p.avatar=ava.value.trim()||p.avatar; FAMILY=familyFromFeeds(); renderFamily(); patchPerson(p.id,{avatar:p.avatar}); });
-    name.addEventListener("change",()=>{ p.name=name.value.trim()||p.name; FAMILY=familyFromFeeds(); renderFamily(); renderFeedEditor(); patchPerson(p.id,{name:p.name}); });
+    col.addEventListener("change",()=>{ p.color=col.value; FAMILY=familyFromFeeds(); renderCalendar();renderAgenda(); patchPerson(p.id,{color:p.color}); });
+    ava.addEventListener("change",()=>{ p.avatar=ava.value.trim()||p.avatar; FAMILY=familyFromFeeds(); patchPerson(p.id,{avatar:p.avatar}); });
+    name.addEventListener("change",()=>{ p.name=name.value.trim()||p.name; FAMILY=familyFromFeeds(); renderFeedEditor(); patchPerson(p.id,{name:p.name}); });
     del.addEventListener("click",()=>{
       pop();
       if(!confirm(`Remove “${p.name}”? Their calendars stay on the wall but become unassigned.`)) return;
       PEOPLE.splice(i,1); FAMILY=familyFromFeeds();
-      renderPeopleEditor(); renderFeedEditor(); renderFamily();
+      renderPeopleEditor(); renderFeedEditor();
       fetch('/api/people/delete',{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({id:p.id})}).catch(()=>{});
       setTimeout(()=>{ loadFeeds().then(()=>{renderPeopleEditor();renderFeedEditor();}); loadEvents(); }, 1800);
@@ -1888,7 +1978,7 @@ async function addPerson(){
       body:JSON.stringify({name})});
     const j=await r.json();
     if(j.ok){ PEOPLE.push(j.person); FAMILY=familyFromFeeds();
-      renderPeopleEditor(); renderFeedEditor(); renderFamily(); pop(true); }
+      renderPeopleEditor(); renderFeedEditor(); pop(true); }
   }catch(e){/* offline — ignore */}
 }
 $("#addPerson").addEventListener("click",()=>{pop();addPerson();});
@@ -2009,7 +2099,7 @@ function setTab(name){
   document.querySelectorAll('.set-panel').forEach(p=>p.classList.toggle('active',p.dataset.panel===name));
 }
 $("#setNav").addEventListener("click",e=>{ const t=e.target.closest('.set-tab'); if(t){ pop(); setTab(t.dataset.tab); } });
-$("#settingsBtn").addEventListener("click",()=>{pop();$("#settings").classList.add("on");setTab('appearance');renderThemePicker();renderCountdownEditor();renderFirstFiveEditor();loadChores().then(()=>{renderChoreEditor();renderChores();});loadFeeds().then(()=>{renderPeopleEditor();renderFeedEditor();});});
+$("#settingsBtn").addEventListener("click",()=>{pop();$("#settings").classList.add("on");setTab('appearance');renderThemePicker();renderCountdownEditor();renderFirstFiveEditor();loadChores().then(()=>{renderChoreEditor();renderChores();});loadShopping().then(()=>{renderGroceryEditor();renderGrocery();});loadFeeds().then(()=>{renderPeopleEditor();renderFeedEditor();});});
 $("#sDone").addEventListener("click",()=>{pop();closeEmojiPicker();$("#settings").classList.remove("on");});
 $("#settings").addEventListener("click",e=>{if(e.target.id==="settings"){pop();closeEmojiPicker();$("#settings").classList.remove("on");}});
 
@@ -2141,6 +2231,145 @@ $("#chqrClose").addEventListener("click",()=>{pop();closeChoreQr();});
 $("#chqrmodal").addEventListener("click",e=>{if(e.target.id==="chqrmodal"){pop();closeChoreQr();}});
 
 /* ============================================================
+   GROCERY SETTINGS EDITOR + ADD-BY-PHOTO + PHOTO REVIEW
+   ============================================================ */
+function renderGroceryEditor(){
+  const wrap=$("#groceryEditor"); if(!wrap) return; wrap.innerHTML="";
+  if(!grocery.length){
+    wrap.innerHTML=`<div class="empty" style="padding:8px 4px">List is empty — add items here, or snap a photo of a written list.</div>`;
+    return;
+  }
+  grocery.forEach((it,i)=>{
+    const row=document.createElement("div");row.className="fam-edit";
+    row.innerHTML=`<input type="text" value="${it.text.replace(/"/g,'&quot;')}" maxlength="60">
+      <button class="del" title="Remove"><img class="ctrlIcon" src="/icons/ui_delete.png" alt="Remove"></button>`;
+    const name=row.querySelector('input[type=text]');
+    const del=row.querySelector('.del');
+    name.addEventListener("change",()=>{
+      it.text=name.value.trim()||it.text; renderGrocery();
+      postJSON('/api/shopping/update',{id:it.id,text:it.text});
+    });
+    del.addEventListener("click",()=>{
+      pop();
+      grocery.splice(i,1); renderGroceryEditor(); renderGrocery();
+      postJSON('/api/shopping/delete',{id:it.id});
+    });
+    wrap.appendChild(row);
+  });
+}
+$("#addGrocery").addEventListener("click",()=>{pop();addGroceryPrompt();});
+$("#addGroceryPhoto").addEventListener("click",()=>{pop();openGroceryQr();});
+$("#clearGroceryDone").addEventListener("click",async()=>{
+  pop();
+  if(!grocery.some(it=>it.done)){ return; }
+  if(!confirm("Remove all bought items from the list?")) return;
+  try{ await fetch('/api/shopping/clear-done',{method:'POST'}); }catch(e){/* offline */}
+  await loadShopping(); renderGrocery(); renderGroceryEditor();
+});
+
+/* --- add by photo: open a phone window + QR, poll for the snapped photo --- */
+let grqrPoll=null, grqrToken=null;
+async function openGroceryQr(){
+  $("#grqrmodal").classList.add("on");
+  $("#grqrStatus").textContent="opening…"; $("#grqrUrl").textContent=""; $("#grqrImg").removeAttribute("src");
+  try{
+    const r=await fetch('/api/grocery-window/open',{method:'POST'});
+    const w=await r.json(); grqrToken=w.token;
+    $("#grqrImg").src='/api/grocery-qr?token='+w.token+'&_='+Date.now();
+    $("#grqrUrl").textContent=w.url;
+    $("#grqrStatus").textContent='waiting for your photo…';
+    clearInterval(grqrPoll); grqrPoll=setInterval(pollGroceryQr,1500);
+  }catch(e){
+    $("#grqrStatus").innerHTML='<img class="inlineWarn" src="/icons/ui_warn.png" alt=""> couldn’t start — is the box online?';
+  }
+}
+async function pollGroceryQr(){
+  if(!grqrToken)return;
+  try{
+    const r=await fetch('/api/grocery-window/status?token='+grqrToken+'&_='+Date.now());
+    const s=await r.json();
+    if(s.received){
+      clearInterval(grqrPoll);
+      $("#grqrStatus").innerHTML='📷 received — confirm on the wall.';
+      setTimeout(()=>{ closeGroceryQr(); pollGroceryReview(); }, 900);
+    }else if(!s.open){
+      clearInterval(grqrPoll);
+      $("#grqrStatus").textContent='⌛ window expired — tap “Add by photo” again';
+    }else{
+      $("#grqrStatus").textContent=`waiting for your photo…  (${fmtSecs(s.remaining)})`;
+    }
+  }catch(e){/* keep polling; transient */}
+}
+function closeGroceryQr(){clearInterval(grqrPoll);grqrToken=null;$("#grqrmodal").classList.remove("on");}
+$("#grqrClose").addEventListener("click",()=>{pop();closeGroceryQr();});
+$("#grqrmodal").addEventListener("click",e=>{if(e.target.id==="grqrmodal"){pop();closeGroceryQr();}});
+
+/* --- review the items read from the photo before they hit the list --- */
+let grReviewOpen=false, grReviewHasKey=false;
+async function pollGroceryReview(){
+  if(grReviewOpen) return;                       // already showing the sheet
+  try{
+    const r=await fetch('/api/grocery/pending?_='+Date.now());
+    const j=await r.json();
+    grReviewHasKey=!!j.has_key;
+    if(j.pending) openGroceryReview(j.items||[], j.source);
+  }catch(e){/* transient */}
+}
+function grReviewRow(text){
+  const row=document.createElement("div");row.className="fam-edit";
+  row.innerHTML=`<input type="text" value="${String(text).replace(/"/g,'&quot;')}" maxlength="60">
+    <button class="del" title="Drop"><img class="ctrlIcon" src="/icons/ui_delete.png" alt="Drop"></button>`;
+  row.querySelector('.del').addEventListener("click",()=>{ pop(); row.remove(); });
+  return row;
+}
+function openGroceryReview(items, source){
+  grReviewOpen=true;
+  const rows=$("#grReviewRows"); rows.innerHTML="";
+  (items.length?items:[""]).forEach(t=>rows.appendChild(grReviewRow(t)));
+  $("#grReviewSub").textContent = source==='cloud'
+    ? "We read these items — fix any text, drop what you don't want, then add them."
+    : "Read on the box (offline). Fix anything that looks off, then add them.";
+  // "Read better" only when an offline read happened and a key is configured
+  $("#grReviewBetter").style.display = (source!=='cloud' && grReviewHasKey) ? '' : 'none';
+  $("#groceryReview").classList.add("on");
+}
+function closeGroceryReview(){ grReviewOpen=false; $("#groceryReview").classList.remove("on"); }
+function grReviewItems(){
+  return Array.from($("#grReviewRows").querySelectorAll('input[type=text]'))
+    .map(i=>i.value.trim()).filter(Boolean);
+}
+$("#grReviewAdd2").addEventListener("click",()=>{ pop(); $("#grReviewRows").appendChild(grReviewRow("")); });
+$("#grReviewCommit").addEventListener("click",async()=>{
+  pop();
+  const items=grReviewItems();
+  try{ await fetch('/api/grocery/commit',{method:'POST',
+    headers:{'Content-Type':'application/json'},body:JSON.stringify({items})}); }catch(e){/* offline */}
+  closeGroceryReview();
+  await loadShopping(); renderGrocery(); renderGroceryEditor(); confettiBurst();
+});
+$("#grReviewDismiss").addEventListener("click",async()=>{
+  pop();
+  try{ await fetch('/api/grocery/dismiss',{method:'POST'}); }catch(e){/* offline */}
+  closeGroceryReview();
+});
+$("#grReviewBetter").addEventListener("click",async()=>{
+  pop();
+  $("#grReviewBetter").textContent="✨ reading…";
+  try{
+    const r=await fetch('/api/grocery/read-better',{method:'POST'});
+    const j=await r.json();
+    if(j.ok){
+      const rows=$("#grReviewRows"); rows.innerHTML="";
+      (j.items.length?j.items:[""]).forEach(t=>rows.appendChild(grReviewRow(t)));
+      $("#grReviewSub").textContent="Re-read with the cloud reader. Tidy up, then add them.";
+      $("#grReviewBetter").style.display='none';
+    }
+  }catch(e){/* leave as-is */}
+  $("#grReviewBetter").textContent="✨ Read better";
+});
+$("#groceryReview").addEventListener("click",e=>{if(e.target.id==="groceryReview"){pop();}});
+
+/* ============================================================
    SUBSCRIBE / EXPORT FLOW  (wall → phones)
    Publishes the merged family.ics behind a secret token; phones scan
    the QR to subscribe, or download a one-off .ics/.csv copy.
@@ -2223,7 +2452,7 @@ function checkReminders(){
 applyTheme(themeKey);
 tick();setInterval(tick,1000);
 setInterval(tickCountdown,1000);   // live countdown timer when focused
-renderAgenda();renderChores();renderFamily();renderCountdowns();renderFirstFive();
+renderAgenda();renderChores();renderGrocery();renderCountdowns();renderFirstFive();
 scheduleMidnightRollover();  // First Five resets fresh each morning at 00:00
 buildDashboard();            // place widgets into focus/rail + render calendar
 updateSoundBtn();resetIdle();
@@ -2236,6 +2465,13 @@ setInterval(updateSync, 30*1000);     // keep the "N min ago" label honest
 /* load the chore chart from the box, then keep it fresh (phone adds show up) */
 loadChores().then(renderChores);
 setInterval(()=>{ loadChores().then(renderChores); }, 3*60*1000);
+
+/* load the shared grocery list, then keep it fresh (other devices' edits show up) */
+loadShopping().then(renderGrocery);
+setInterval(()=>{ loadShopping().then(renderGrocery); }, 60*1000);
+
+/* watch for a phone photo landing in the review buffer */
+setInterval(pollGroceryReview, 2500);
 
 loadWeather();
 setInterval(loadWeather, 15*60*1000); // refresh weather every 15 min

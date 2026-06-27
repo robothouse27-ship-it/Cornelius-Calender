@@ -26,7 +26,8 @@ chmod 600 "$APPDIR/data/feeds.json" 2>/dev/null || true
 echo "→ installing systemd units"
 render() { sed -e "s|__APPDIR__|$APPDIR|g" -e "s|__USER__|$USER_NAME|g" "$1"; }
 for unit in familycal-web.service familycal-fetch.service familycal-fetch.timer \
-            familycal-update.service familycal-update.timer; do
+            familycal-update.service familycal-update.timer \
+            familycal-voice.service; do
   render "$APPDIR/deploy/$unit" | sudo tee "/etc/systemd/system/$unit" >/dev/null
 done
 sudo systemctl daemon-reload
@@ -51,3 +52,13 @@ echo "Done. The wall is live at http://localhost:8080"
 echo "  • web service:  sudo systemctl status familycal-web"
 echo "  • fetch timer:  systemctl list-timers familycal-fetch"
 echo "  • reboot to test the kiosk autostart, or run: deploy/kiosk.sh"
+echo
+echo "Optional add-ons (docs-grocery-voice-plan.md):"
+echo "  • Photo list reading uses Claude vision — add your key, then restart web:"
+echo "      sudo systemctl edit familycal-web   # add: Environment=ANTHROPIC_API_KEY=sk-ant-..."
+echo "      sudo systemctl restart familycal-web"
+echo "    Free on-box OCR fallback (no key needed):  sudo apt install -y tesseract-ocr"
+echo "  • Local voice control needs a mic + audio libs, then enable its service:"
+echo "      sudo apt install -y libportaudio2"
+echo "      sudo systemctl edit familycal-voice  # add the same ANTHROPIC_API_KEY line"
+echo "      sudo systemctl enable --now familycal-voice"

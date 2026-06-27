@@ -1,0 +1,20 @@
+[Unit]
+Description=Family Calendar local voice control (wake word + Whisper + Piper)
+After=familycal-web.service sound.target
+Wants=familycal-web.service
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__APPDIR__
+ExecStart=__APPDIR__/.venv/bin/python __APPDIR__/voice.py
+Restart=always
+RestartSec=5
+Environment=FAMILYCAL_TZ=America/Los_Angeles
+# Voice listens on the box's mic and offloads free-form questions to Claude.
+# Add the API key here too so the Claude fallback works:
+#   Environment=ANTHROPIC_API_KEY=sk-ant-...
+# Tunables (optional): FAMILYCAL_WAKE_WORD, FAMILYCAL_WHISPER_MODEL, PIPER_VOICE.
+
+[Install]
+WantedBy=multi-user.target

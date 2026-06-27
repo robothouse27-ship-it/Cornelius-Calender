@@ -37,6 +37,8 @@ EVENTS_PATH = DATA / "events.json"
 FEEDS_PATH = DATA / "feeds.json"
 EXPORT_PATH = DATA / "export.json"   # persistent secret token for the family feed
 CHORES_PATH = DATA / "chores.json"   # box-side chore chart (rotates daily on the wall)
+SHOPPING_PATH = DATA / "shopping.json"  # shared family grocery list (done = server-side)
+UPLOADS_DIR = HERE / "uploads"       # phone-snapped list photos, pending review (gitignored)
 PHOTOS_DIR = HERE / "photos"        # drop family photos here for sleep mode
 ICONS_DIR = HERE / "icons"          # pastel sticker icons (weather/chores/events)
 KIDS_DIR = HERE / "kids"            # cartoon avatars for the First Five widget
@@ -121,6 +123,156 @@ def new_chore(label, existing):
     return {"id": "c_" + uuid.uuid4().hex[:6],
             "label": str(label).strip()[:40],
             "seed": len(existing)}
+
+
+# --- shared grocery list (one family list; "done" is a server-side boolean so
+#     checking milk clears it on every device) ------------------------------- #
+def load_shopping():
+    if SHOPPING_PATH.exists():
+        try:
+            return json.loads(SHOPPING_PATH.read_text())
+        except (ValueError, OSError):
+            pass
+    return {"items": []}
+
+
+def save_shopping(doc):
+    fd, tmp = tempfile.mkstemp(dir=str(DATA), suffix=".tmp")
+    with os.fdopen(fd, "w") as fh:
+        json.dump(doc, fh, indent=2)
+    os.replace(tmp, SHOPPING_PATH)
+
+
+def new_grocery(text):
+    return {"id": "g_" + uuid.uuid4().hex[:6],
+            "text": str(text).strip()[:60],
+            "done": False}
+
+
+# --------------------------------------------------------------------------- #
+# photo → grocery items (Stage B): preprocess, then read with Claude vision
+# (primary) or Tesseract (free on-box fallback). structure_items() is the pure
+# text→list cleaner shared by the fallback path; it's unit-tested.
+# --------------------------------------------------------------------------- #
+EXTRACT_PROMPT = ("This photo shows a handwritten or printed grocery/shopping "
+                  "list. List the grocery items, one clean entry each. Ignore "
+                  "headers, dates, prices, quantities-only lines, and anything "
+                  "crossed out. Return just the item names.")
+
+# a line is junk if it's empty, all punctuation, or an obvious header/price
+_PRICE_RE = re.compile(r"^[\$£€]?\d+([.,]\d+)?\s*$")
+_HEADER_RE = re.compile(r"^(shopping|grocery|groceries|to\s*buy|todo|to\s*do|"
+                        r"notes?)(\s+list)?[:\s]*$", re.I)
+# a bracketed checkbox like "[ ]", "[x]", "(✓)" at the very start of a line
+_CHECKBOX_RE = re.compile(r"^[\[(]\s*[xX✓✔ ]?\s*[\])]\s*")
+# leading bullets, checkbox glyphs, stray brackets — anything before the item
+_LEADING_RE = re.compile(r"^[\s\-–—*•·▪◦‣○●□■☐☑☒✔✓\[\]\(\)]+")
+_NUM_RE = re.compile(r"^\d+[.)]?\s+")                   # "1. ", "2) ", "3 " quantities/numbering
+
+
+def structure_items(text):
+    """Turn raw OCR text into a clean, de-duped list of grocery items."""
+    out, seen = [], set()
+    for raw in str(text or "").splitlines():
+        line = raw.strip()
+        line = _CHECKBOX_RE.sub("", line)              # "[ ] " / "[x] " / "(✓) "
+        line = _LEADING_RE.sub("", line)               # bullet / checkbox glyph
+        line = _NUM_RE.sub("", line)                   # leading number / quantity
+        line = _LEADING_RE.sub("", line).strip()       # any trailing bullet remnant
+        if not line or len(line) < 2:
+            continue
+        if _PRICE_RE.match(line) or _HEADER_RE.match(line):
+            continue
+        if not re.search(r"[A-Za-z]", line):           # drop pure punctuation/digits
+            continue
+        line = line[:60]
+        key = line.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(line)
+    return out
+
+
+def preprocess_image(src_path, dst_path=None):
+    """EXIF-rotate, RGB, shrink to 1600px, re-save as JPEG (drops EXIF/GPS).
+    Returns the path written, or the original path if Pillow is unavailable."""
+    try:
+        from PIL import Image, ImageOps
+    except ImportError:
+        return src_path
+    dst_path = dst_path or src_path
+    with Image.open(src_path) as im:
+        im = ImageOps.exif_transpose(im).convert("RGB")
+        im.thumbnail((1600, 1600))
+        im.save(dst_path, format="JPEG", quality=85)
+    return dst_path
+
+
+def vision_key():
+    return os.environ.get("ANTHROPIC_API_KEY", "").strip()
+
+
+def read_cloud(path):
+    """Primary reader: Claude vision → clean item list (structured output)."""
+    import base64
+    import anthropic
+
+    model = os.environ.get("FAMILYCAL_VISION_MODEL", "claude-opus-4-8")
+    with open(path, "rb") as fh:
+        data = base64.standard_b64encode(fh.read()).decode("ascii")
+    client = anthropic.Anthropic()      # reads ANTHROPIC_API_KEY from env
+    resp = client.messages.create(
+        model=model,
+        max_tokens=1024,
+        output_config={"format": {"type": "json_schema", "schema": {
+            "type": "object",
+            "properties": {"items": {"type": "array", "items": {"type": "string"}}},
+            "required": ["items"],
+            "additionalProperties": False,
+        }}},
+        messages=[{"role": "user", "content": [
+            {"type": "image", "source": {"type": "base64",
+             "media_type": "image/jpeg", "data": data}},
+            {"type": "text", "text": EXTRACT_PROMPT},
+        ]}],
+    )
+    text = next((b.text for b in resp.content if b.type == "text"), "{}")
+    items = (json.loads(text) or {}).get("items", [])
+    # final cleanup pass (trim, cap length, de-dupe) — cheap and consistent
+    out, seen = [], set()
+    for it in items:
+        s = str(it).strip()[:60]
+        if s and s.lower() not in seen:
+            seen.add(s.lower())
+            out.append(s)
+    return out
+
+
+def read_local(path):
+    """Free on-box fallback: Tesseract OCR → structure_items()."""
+    try:
+        import pytesseract
+        from PIL import Image
+    except ImportError:
+        return []
+    try:
+        with Image.open(path) as im:
+            raw = pytesseract.image_to_string(im)
+    except Exception:
+        return []
+    return structure_items(raw)
+
+
+def read_photo(path):
+    """Read items from a list photo. Cloud first (if a key is set), else local.
+    Returns (items, source) where source is 'cloud' or 'local'."""
+    if vision_key():
+        try:
+            return read_cloud(path), "cloud"
+        except Exception:
+            pass                          # offline / SDK missing / API error → fall back
+    return read_local(path), "local"
 
 
 def trigger_fetch():
@@ -359,6 +511,215 @@ def chores_delete():
         return jsonify({"ok": False, "error": "not found"}), 404
     save_chores(doc)
     return jsonify({"ok": True})
+
+
+# --------------------------------------------------------------------------- #
+# grocery list (one shared family list; "done" is a server-side boolean shared
+# across every device — checking milk on the wall clears it on a phone too)
+# --------------------------------------------------------------------------- #
+@app.route("/api/shopping")
+def shopping_list():
+    return jsonify(load_shopping())
+
+
+@app.route("/api/shopping/add", methods=["POST"])
+def shopping_add():
+    body = request.get_json(force=True, silent=True) or {}
+    text = str(body.get("text", "")).strip()
+    if not text:
+        return jsonify({"ok": False, "error": "text required"}), 400
+    doc = load_shopping()
+    item = new_grocery(text)
+    doc.setdefault("items", []).append(item)
+    save_shopping(doc)
+    return jsonify({"ok": True, "item": item})
+
+
+@app.route("/api/shopping/update", methods=["POST"])
+def shopping_update():
+    body = request.get_json(force=True, silent=True) or {}
+    iid = body.get("id")
+    doc = load_shopping()
+    for it in doc.get("items", []):
+        if it.get("id") == iid:
+            if "text" in body:
+                it["text"] = str(body["text"]).strip()[:60] or it["text"]
+            if "done" in body:
+                it["done"] = bool(body["done"])
+            save_shopping(doc)
+            return jsonify({"ok": True, "item": it})
+    return jsonify({"ok": False, "error": "not found"}), 404
+
+
+@app.route("/api/shopping/delete", methods=["POST"])
+def shopping_delete():
+    body = request.get_json(force=True, silent=True) or {}
+    iid = body.get("id")
+    doc = load_shopping()
+    before = len(doc.get("items", []))
+    doc["items"] = [it for it in doc.get("items", []) if it.get("id") != iid]
+    if len(doc["items"]) == before:
+        return jsonify({"ok": False, "error": "not found"}), 404
+    save_shopping(doc)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/shopping/clear-done", methods=["POST"])
+def shopping_clear_done():
+    doc = load_shopping()
+    before = len(doc.get("items", []))
+    doc["items"] = [it for it in doc.get("items", []) if not it.get("done")]
+    save_shopping(doc)
+    return jsonify({"ok": True, "removed": before - len(doc["items"])})
+
+
+# --------------------------------------------------------------------------- #
+# grocery photo capture (Stage B): phone snaps a written list → upload → read
+# with Claude vision (or Tesseract) → the wall reviews + commits the items.
+# Mirrors the chore QR-window pattern, but the phone POSTs a photo (multipart)
+# and the result lands in a pending-review buffer instead of straight on the list.
+# --------------------------------------------------------------------------- #
+grocery_window = {"token": None, "expires_at": 0.0}
+# pending = {"photo_path", "items":[...], "source":"cloud|local", "at": ts}
+grocery_review = None
+
+
+def grocery_window_open():
+    return (grocery_window["token"] is not None
+            and time.time() < grocery_window["expires_at"])
+
+
+@app.route("/api/grocery-window/open", methods=["POST"])
+def grocery_window_open_route():
+    token = uuid.uuid4().hex
+    grocery_window.update(token=token, expires_at=time.time() + WINDOW_SECS)
+    url = f"http://{lan_ip()}:{PORT}/grocery?token={token}"
+    return jsonify({"token": token, "url": url, "expires_in": WINDOW_SECS,
+                    "has_key": bool(vision_key())})
+
+
+@app.route("/api/grocery-window/status")
+def grocery_window_status():
+    token = request.args.get("token", "")
+    if token != grocery_window["token"]:
+        return jsonify({"open": False, "received": False, "remaining": 0})
+    remaining = max(0, int(grocery_window["expires_at"] - time.time()))
+    return jsonify({"open": remaining > 0,
+                    "received": grocery_review is not None,
+                    "remaining": remaining})
+
+
+@app.route("/api/grocery-qr")
+def grocery_qr():
+    token = request.args.get("token", "")
+    if token != grocery_window["token"]:
+        abort(404)
+    url = f"http://{lan_ip()}:{PORT}/grocery?token={token}"
+    img = qrcode.make(url)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return send_file(buf, mimetype="image/png")
+
+
+@app.route("/grocery", methods=["GET"])
+def grocery_page():
+    token = request.args.get("token", "")
+    ok = token == grocery_window["token"] and grocery_window_open()
+    return Response(render_grocery_page(token, ok), mimetype="text/html")
+
+
+@app.route("/grocery", methods=["POST"])
+def grocery_submit():
+    global grocery_review
+    token = request.form.get("token", "")
+    if token != grocery_window["token"] or not grocery_window_open():
+        return Response(render_result_page(False, "This photo window has closed. "
+                        "Tap “Add by photo” on the wall again."),
+                        mimetype="text/html", status=403)
+    photo = request.files.get("photo")
+    if not photo or not photo.filename:
+        return Response(render_result_page(False, "No photo came through — try again."),
+                        mimetype="text/html", status=400)
+
+    UPLOADS_DIR.mkdir(exist_ok=True)
+    dest = UPLOADS_DIR / ("list_" + uuid.uuid4().hex[:8] + ".jpg")
+    photo.save(str(dest))
+    try:
+        preprocess_image(str(dest))           # rotate/shrink/strip EXIF in place
+    except Exception:
+        pass
+    items, source = read_photo(str(dest))
+
+    grocery_review = {"photo_path": str(dest), "items": items,
+                      "source": source, "at": time.time()}
+    grocery_window["expires_at"] = 0          # consume the window
+    return Response(render_result_page(True, "Sent — confirm it on your wall."),
+                    mimetype="text/html")
+
+
+@app.route("/api/grocery/pending")
+def grocery_pending():
+    if grocery_review is None:
+        return jsonify({"pending": False, "has_key": bool(vision_key())})
+    return jsonify({"pending": True, "items": grocery_review["items"],
+                    "source": grocery_review["source"],
+                    "has_key": bool(vision_key())})
+
+
+def _clear_review(delete_photo=True):
+    global grocery_review
+    if grocery_review and delete_photo:
+        try:
+            os.remove(grocery_review["photo_path"])
+        except OSError:
+            pass
+    grocery_review = None
+
+
+@app.route("/api/grocery/commit", methods=["POST"])
+def grocery_commit():
+    if grocery_review is None:
+        return jsonify({"ok": False, "error": "nothing pending"}), 404
+    body = request.get_json(force=True, silent=True) or {}
+    items = body.get("items", grocery_review["items"])
+    doc = load_shopping()
+    added = []
+    for text in items:
+        text = str(text).strip()
+        if not text:
+            continue
+        item = new_grocery(text)
+        doc.setdefault("items", []).append(item)
+        added.append(item)
+    save_shopping(doc)
+    _clear_review(delete_photo=True)
+    return jsonify({"ok": True, "added": added})
+
+
+@app.route("/api/grocery/dismiss", methods=["POST"])
+def grocery_dismiss():
+    if grocery_review is None:
+        return jsonify({"ok": False, "error": "nothing pending"}), 404
+    _clear_review(delete_photo=True)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/grocery/read-better", methods=["POST"])
+def grocery_read_better():
+    """Re-run the cloud reader on the retained photo (used when the offline
+    read was rough and a key is now available)."""
+    if grocery_review is None:
+        return jsonify({"ok": False, "error": "nothing pending"}), 404
+    if not vision_key():
+        return jsonify({"ok": False, "error": "no API key configured"}), 400
+    try:
+        items = read_cloud(grocery_review["photo_path"])
+    except Exception as e:
+        return jsonify({"ok": False, "error": "cloud read failed"}), 502
+    grocery_review["items"] = items
+    grocery_review["source"] = "cloud"
+    return jsonify({"ok": True, "items": items})
 
 
 @app.route("/api/feeds/update", methods=["POST"])
@@ -633,6 +994,26 @@ def render_chore_page(token, ok):
       <p class="hint">Tip: end it with an emoji and it becomes a sticker on the
       wall — e.g. “Water plants 🌱”.</p>
     """, title="Add a chore")
+
+
+def render_grocery_page(token, ok):
+    if not ok:
+        return _page('<div class="big">⌛</div><h1>Window closed</h1>'
+                     '<p class="sub">Tap “Add by photo” on the wall to start again.</p>',
+                     title="Snap a grocery list")
+    return _page(f"""
+      <h1>Snap your list 📷</h1>
+      <p class="sub">Take a photo of a written or printed grocery list. We'll
+      read it and you confirm the items on the wall.</p>
+      <form method="POST" action="/grocery" enctype="multipart/form-data">
+        <input type="hidden" name="token" value="{token}">
+        <label>Photo of the list</label>
+        <input type="file" name="photo" accept="image/*" capture="environment" required>
+        <button type="submit">Send to the wall</button>
+      </form>
+      <p class="hint">Tip: lay the list flat, fill the frame, and keep it in good
+      light — clearer photos read better.</p>
+    """, title="Snap a grocery list")
 
 
 # --------------------------------------------------------------------------- #
