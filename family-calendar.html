@@ -269,6 +269,32 @@
     font-size:14px;color:var(--ink);background:var(--lav-soft);cursor:pointer;transition:.15s;}
   .gro-btn:hover{filter:brightness(.97);}
   .rail .widget.tile .grocery-bar{display:none;}   /* tile view: keep it clean, tap to focus */
+  /* grocery: store-section groups (collapsible), qty steppers, "usuals" chips */
+  .gsec{margin:2px 0 6px;}
+  .gsec-head{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;
+    padding:7px 6px;border-radius:11px;transition:background .15s;}
+  .gsec-head:hover{background:var(--lav-soft);}
+  .gsec-head .caret{font-size:11px;color:var(--ink-soft);transition:transform .2s;width:12px;}
+  .gsec.collapsed .caret{transform:rotate(-90deg);}
+  .gsec-head .gsec-name{font-family:"Fredoka";font-weight:700;font-size:13.5px;
+    letter-spacing:.02em;color:var(--ink-soft);text-transform:uppercase;flex:1;}
+  .gsec-head .gcount{font-weight:800;font-size:12px;color:var(--lav);background:var(--lav-soft);
+    border-radius:9px;padding:2px 8px;}
+  .gsec.collapsed .gsec-items{display:none;}
+  .qstep{flex:none;display:flex;align-items:center;gap:2px;}
+  .qbtn{width:26px;height:26px;border:0;border-radius:50%;background:var(--lav-soft);color:var(--ink);
+    font-size:16px;font-weight:900;line-height:1;cursor:pointer;display:grid;place-items:center;transition:.12s;}
+  .qbtn:hover{filter:brightness(.96);} .qbtn:active{transform:scale(.9);}
+  .qval{min-width:20px;text-align:center;font-weight:900;font-size:14px;color:var(--ink-soft);}
+  .chore.done .qstep{opacity:.5;}
+  .gchips{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 12px;}
+  .gchip{border:0;border-radius:999px;padding:7px 13px;font-family:"Nunito";font-weight:800;
+    font-size:13px;color:#7a5ec9;background:#F1ECFF;cursor:pointer;transition:.12s;}
+  .gchip:hover{filter:brightness(.97);} .gchip:active{transform:scale(.95);}
+  .gchip.on{background:var(--mint-soft);color:#1f9b80;}
+  .gchip-lbl{font-weight:800;font-size:12px;color:var(--ink-soft);margin:0 4px 6px;
+    display:flex;align-items:center;gap:5px;}
+  .rail .widget.tile .gchips,.rail .widget.tile .gchip-lbl{display:none;}
 
   /* First Five — kids' morning routine */
   #w-firstfive .w-body{padding-top:4px;}
@@ -742,13 +768,21 @@
         </section>
         <section class="set-panel" data-panel="groceries">
           <h3>Groceries</h3>
-          <p class="set-hint">One shared family list. Add here or from a phone — checking an item off clears it on every device.</p>
+          <p class="set-hint">One shared family list, grouped by store section. Add here or from a phone — checking an item off clears it on every device.</p>
           <div id="groceryEditor"></div>
           <div class="set-actions">
             <button class="btn" id="addGrocery">🛒 Add an item</button>
-            <button class="btn primary" id="addGroceryPhoto">📷 Add by photo</button>
+            <button class="btn primary" id="addGroceryPhoto">📲 Add from phone</button>
             <button class="btn" id="clearGroceryDone">🧹 Clear bought</button>
           </div>
+          <h3 style="margin-top:22px">Paste a list 📋</h3>
+          <p class="set-hint">Paste or type items (one per line). We'll clean them up, sort them into sections, and merge any duplicates.</p>
+          <textarea id="groceryPaste" rows="4" placeholder="Milk&#10;Eggs&#10;Bananas" style="width:100%;box-sizing:border-box;border:1.5px solid var(--line);border-radius:14px;padding:11px;font:inherit;font-weight:600;resize:vertical"></textarea>
+          <div class="set-actions"><button class="btn primary" id="groceryPasteAdd">＋ Add these</button></div>
+          <h3 style="margin-top:22px">Usuals ⭐</h3>
+          <p class="set-hint">Your common items. They show as one-tap chips on the wall so you don't retype them. One per line.</p>
+          <textarea id="staplesEditor" rows="5" placeholder="Milk&#10;Eggs&#10;Bread" style="width:100%;box-sizing:border-box;border:1.5px solid var(--line);border-radius:14px;padding:11px;font:inherit;font-weight:600;resize:vertical"></textarea>
+          <div class="set-actions"><button class="btn primary" id="staplesSave">💾 Save usuals</button></div>
         </section>
         <section class="set-panel" data-panel="countdowns">
           <h3>Countdowns</h3>
@@ -811,9 +845,9 @@
 <!-- ADD-GROCERY-BY-PHOTO QR MODAL -->
 <div id="grqrmodal">
   <div class="sheet">
-    <h2>Add by photo 📷</h2>
+    <h2>Add from phone 📲</h2>
     <p style="color:var(--ink-soft);font-weight:700;margin:-6px 0 16px;font-size:14px">
-      Scan with your phone, snap a written or printed list, and confirm it here.</p>
+      Scan with your phone, then snap a photo of a list (confirm it here) or paste your items.</p>
     <div style="text-align:center">
       <img id="grqrImg" alt="QR code" width="240" height="240"
            style="border-radius:18px;background:#fff;box-shadow:var(--shadow-soft)">
@@ -1539,12 +1573,26 @@ function renderChores(){
    checking milk on the wall clears it on a phone too. Tap a row
    to toggle bought; bought items grey out and sink to the bottom.
    ============================================================ */
-let grocery = [];   // {id,text,done} from /api/shopping
+let grocery = [];          // {id,text,done,qty,cat} from /api/shopping
+let grocerySections = [];  // [{id,label,emoji}] store-walk order from the server
+let staples = [];          // ["Milk","Eggs",...] the "usuals" quick-add set
+let groceryCollapsed = {};
+try{ groceryCollapsed = JSON.parse(localStorage.getItem('groceryCollapsed')||'{}'); }catch(e){}
+
 async function loadShopping(){
   try{
     const r=await fetch('/api/shopping?_='+Date.now(),{cache:'no-store'});
     const j=await r.json();
-    grocery=(j.items||[]).map(it=>({id:it.id,text:it.text,done:!!it.done}));
+    grocery=(j.items||[]).map(it=>({id:it.id,text:it.text,done:!!it.done,
+      qty:Math.max(1,parseInt(it.qty)||1),cat:it.cat||'other'}));
+    if(Array.isArray(j.sections)&&j.sections.length) grocerySections=j.sections;
+  }catch(e){/* offline → keep whatever we had */}
+}
+async function loadStaples(){
+  try{
+    const r=await fetch('/api/staples?_='+Date.now(),{cache:'no-store'});
+    const j=await r.json();
+    staples=(j.items||[]).filter(Boolean);
   }catch(e){/* offline → keep whatever we had */}
 }
 function groceryToggle(it){
@@ -1552,44 +1600,93 @@ function groceryToggle(it){
   postJSON('/api/shopping/update',{id:it.id,done:it.done});
   if(it.done){ pop(true); }
 }
+function groceryQty(it,delta){
+  const q=Math.max(1,(it.qty||1)+delta);
+  if(q===it.qty) return;
+  it.qty=q; renderGrocery();
+  postJSON('/api/shopping/update',{id:it.id,qty:q});
+}
+function toggleGSection(cat){
+  groceryCollapsed[cat]=!groceryCollapsed[cat];
+  try{ localStorage.setItem('groceryCollapsed',JSON.stringify(groceryCollapsed)); }catch(e){}
+  renderGrocery();
+}
+function groceryRow(it){
+  const wrap=document.createElement("div"); wrap.className="grow";
+  const row=document.createElement("div");row.className="chore"+(it.done?" done":"");
+  row.innerHTML=`<div class="check">✓</div><div class="label"></div>
+    <div class="qstep"><button class="qbtn qminus" title="Less">−</button>
+    <span class="qval"></span><button class="qbtn qplus" title="More">＋</button></div>`;
+  row.querySelector(".label").textContent=it.text;
+  row.querySelector(".qval").textContent="×"+(it.qty||1);
+  row.querySelector(".check").addEventListener("click",e=>{e.stopPropagation();groceryToggle(it);});
+  row.querySelector(".qminus").addEventListener("click",e=>{e.stopPropagation();groceryQty(it,-1);});
+  row.querySelector(".qplus").addEventListener("click",e=>{e.stopPropagation();groceryQty(it,1);});
+  const x=document.createElement("button"); x.className="gro-x"; x.title="Remove"; x.textContent="✕";
+  x.addEventListener("click",e=>{e.stopPropagation();groceryRemove(it);});
+  wrap.appendChild(row); wrap.appendChild(x);
+  return wrap;
+}
+function grocerySectionGroup(name,catKey,items){
+  const wrap=document.createElement("div");
+  wrap.className="gsec"+(groceryCollapsed[catKey]?" collapsed":"");
+  const head=document.createElement("div"); head.className="gsec-head";
+  head.innerHTML=`<span class="caret">▼</span>
+    <span class="gsec-name">${name}</span><span class="gcount">${items.length}</span>`;
+  head.addEventListener("click",e=>{e.stopPropagation();toggleGSection(catKey);});
+  const box=document.createElement("div"); box.className="gsec-items";
+  items.forEach(it=>box.appendChild(groceryRow(it)));
+  wrap.appendChild(head); wrap.appendChild(box);
+  return wrap;
+}
 function renderGrocery(){
   const c=$("#grocery"); if(!c) return; c.innerHTML="";
-  // header actions: type-to-add + add-by-photo (work from the focused widget)
-  const bar=document.createElement("div");
-  bar.className="grocery-bar";
+  // header actions: type-to-add + add-from-phone (work from the focused widget)
+  const bar=document.createElement("div"); bar.className="grocery-bar";
   bar.innerHTML=`<button class="gro-btn" id="groAdd">＋ Add item</button>
-    <button class="gro-btn" id="groPhoto">📷 Add by photo</button>`;
+    <button class="gro-btn" id="groPhone">📲 Add from phone</button>`;
   c.appendChild(bar);
   bar.querySelector("#groAdd").addEventListener("click",e=>{e.stopPropagation();addGroceryPrompt();});
-  bar.querySelector("#groPhoto").addEventListener("click",e=>{e.stopPropagation();openGroceryQr();});
+  bar.querySelector("#groPhone").addEventListener("click",e=>{e.stopPropagation();openGroceryQr();});
+
+  // "usuals" quick-add chips — tap to add (already-on-list ones show a check)
+  if(staples.length){
+    const onList=new Set(grocery.filter(it=>!it.done).map(it=>it.text.toLowerCase()));
+    const lbl=document.createElement("div"); lbl.className="gchip-lbl"; lbl.textContent="⭐ Usuals";
+    const chips=document.createElement("div"); chips.className="gchips";
+    staples.forEach(name=>{
+      const on=onList.has(name.toLowerCase());
+      const b=document.createElement("button");
+      b.className="gchip"+(on?" on":""); b.textContent=(on?"✓ ":"")+name;
+      b.addEventListener("click",e=>{e.stopPropagation();quickAddGrocery(name);});
+      chips.appendChild(b);
+    });
+    c.appendChild(lbl); c.appendChild(chips);
+  }
 
   if(!grocery.length){
     const empty=document.createElement("div");
     empty.className="empty"; empty.style.cssText="padding:14px 6px";
-    empty.textContent="Nothing on the list — add an item or snap a photo.";
+    empty.textContent="Nothing on the list — add an item, tap a usual, or use your phone.";
     c.appendChild(empty); return;
   }
-  // unbought first (in order), bought sinks to the bottom. Each row carries a
-  // ✕ to remove that one item; a Clear-all + Export bar sits under the list.
-  const ordered=[...grocery].sort((a,b)=>(a.done?1:0)-(b.done?1:0));
-  ordered.forEach(it=>{
-    const wrap=document.createElement("div"); wrap.className="grow";
-    const row=document.createElement("div");row.className="chore"+(it.done?" done":"");
-    row.innerHTML=`<div class="check">✓</div><div class="label"></div>`;
-    row.querySelector(".label").textContent=it.text;
-    row.querySelector(".check").addEventListener("click",e=>{e.stopPropagation();groceryToggle(it);});
-    const x=document.createElement("button"); x.className="gro-x"; x.title="Remove";
-    x.textContent="✕";
-    x.addEventListener("click",e=>{e.stopPropagation();groceryRemove(it);});
-    wrap.appendChild(row); wrap.appendChild(x);
-    c.appendChild(wrap);
+
+  // un-bought items grouped under store sections, in shopping order
+  const todo=grocery.filter(it=>!it.done);
+  const secs=grocerySections.length?grocerySections:[{id:'other',label:'Other',emoji:'🛒'}];
+  secs.forEach(sec=>{
+    const grp=todo.filter(it=>(it.cat||'other')===sec.id);
+    if(grp.length) c.appendChild(grocerySectionGroup(`${sec.emoji} ${sec.label}`,sec.id,grp));
   });
-  const left=grocery.filter(it=>!it.done).length;
+  // bought items collected at the bottom
+  const done=grocery.filter(it=>it.done);
+  if(done.length) c.appendChild(grocerySectionGroup("✓ Got it","__done",done));
+
   const foot=document.createElement("div");
   foot.style.cssText="text-align:center;font-weight:800;color:var(--lav);margin:6px 0 8px;font-size:15px;";
-  foot.textContent=left?`🛒 ${left} to get`:`✓ all done!`;
+  foot.textContent=todo.length?`🛒 ${todo.length} to get`:`✓ all done!`;
   c.appendChild(foot);
-  // bottom action bar: export/share + clear all
+
   const tools=document.createElement("div"); tools.className="grocery-bar";
   tools.innerHTML=`<button class="gro-btn export" id="groExport">📤 Export</button>
     <button class="gro-btn clear" id="groClear">🗑️ Clear all</button>`;
@@ -1611,16 +1708,33 @@ async function groceryClearAll(){
   grocery=[]; renderGrocery(); renderGroceryEditor(); pop();
   try{ await fetch('/api/shopping/clear-all',{method:'POST'}); }catch(e){/* offline */}
 }
+// add through the server so duplicates merge (qty bumps) and items get a section
+async function groceryAddText(text){
+  text=String(text||"").trim(); if(!text) return;
+  try{
+    await fetch('/api/shopping/add',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+    await loadShopping(); renderGrocery(); renderGroceryEditor();
+  }catch(e){/* offline */}
+}
 async function addGroceryPrompt(){
   const text=(await askText({title:"Add to the list 🛒",placeholder:"e.g. Milk"})||"").trim();
   if(!text) return;
+  await groceryAddText(text); pop(true);
+}
+async function quickAddGrocery(name){
+  await groceryAddText(name); pop(true);
+}
+// paste/type many items at once (one per line) — server cleans, categorizes, merges
+async function groceryAddMany(text){
+  text=String(text||"").trim(); if(!text) return 0;
   try{
-    const r=await fetch('/api/shopping/add',{method:'POST',
+    const r=await fetch('/api/shopping/add-many',{method:'POST',
       headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
     const j=await r.json();
-    if(j.ok){ grocery.push({id:j.item.id,text:j.item.text,done:false});
-      renderGrocery(); renderGroceryEditor(); pop(true); }
-  }catch(e){/* offline */}
+    await loadShopping(); renderGrocery(); renderGroceryEditor();
+    return (j&&j.count)||0;
+  }catch(e){ return 0; }
 }
 
 /* ============================================================
@@ -2209,7 +2323,7 @@ function setTab(name){
   document.querySelectorAll('.set-panel').forEach(p=>p.classList.toggle('active',p.dataset.panel===name));
 }
 $("#setNav").addEventListener("click",e=>{ const t=e.target.closest('.set-tab'); if(t){ pop(); setTab(t.dataset.tab); } });
-$("#settingsBtn").addEventListener("click",()=>{pop();$("#settings").classList.add("on");setTab('appearance');renderThemePicker();renderCountdownEditor();renderFirstFiveEditor();loadChores().then(()=>{renderChoreEditor();renderChores();});loadShopping().then(()=>{renderGroceryEditor();renderGrocery();});loadFeeds().then(()=>{renderPeopleEditor();renderFeedEditor();});});
+$("#settingsBtn").addEventListener("click",()=>{pop();$("#settings").classList.add("on");setTab('appearance');renderThemePicker();renderCountdownEditor();renderFirstFiveEditor();loadChores().then(()=>{renderChoreEditor();renderChores();});loadShopping().then(()=>{renderGroceryEditor();renderGrocery();});loadStaples().then(()=>{renderStaplesEditor();renderGrocery();});loadFeeds().then(()=>{renderPeopleEditor();renderFeedEditor();});});
 $("#sDone").addEventListener("click",()=>{pop();closeEmojiPicker();$("#settings").classList.remove("on");});
 $("#settings").addEventListener("click",e=>{if(e.target.id==="settings"){pop();closeEmojiPicker();$("#settings").classList.remove("on");}});
 
@@ -2346,18 +2460,27 @@ $("#chqrmodal").addEventListener("click",e=>{if(e.target.id==="chqrmodal"){pop()
 function renderGroceryEditor(){
   const wrap=$("#groceryEditor"); if(!wrap) return; wrap.innerHTML="";
   if(!grocery.length){
-    wrap.innerHTML=`<div class="empty" style="padding:8px 4px">List is empty — add items here, or snap a photo of a written list.</div>`;
+    wrap.innerHTML=`<div class="empty" style="padding:8px 4px">List is empty — add items here, or use a phone.</div>`;
     return;
   }
+  const secs=grocerySections.length?grocerySections:[{id:'other',label:'Other',emoji:'🛒'}];
+  const opts=secs.map(s=>`<option value="${s.id}">${s.emoji} ${s.label}</option>`).join("");
   grocery.forEach((it,i)=>{
     const row=document.createElement("div");row.className="fam-edit";
-    row.innerHTML=`<input type="text" value="${it.text.replace(/"/g,'&quot;')}" maxlength="60">
+    row.innerHTML=`<input type="text" value="${it.text.replace(/"/g,'&quot;')}" maxlength="60" style="flex:1">
+      <select class="gcatsel" title="Section" style="flex:none;max-width:140px">${opts}</select>
       <button class="del" title="Remove"><img class="ctrlIcon" src="/icons/ui_delete.png" alt="Remove"></button>`;
     const name=row.querySelector('input[type=text]');
+    const sel=row.querySelector('.gcatsel');
     const del=row.querySelector('.del');
+    sel.value=it.cat||'other';
     name.addEventListener("change",()=>{
       it.text=name.value.trim()||it.text; renderGrocery();
       postJSON('/api/shopping/update',{id:it.id,text:it.text});
+    });
+    sel.addEventListener("change",()=>{
+      it.cat=sel.value; renderGrocery();
+      postJSON('/api/shopping/update',{id:it.id,cat:it.cat});
     });
     del.addEventListener("click",()=>{
       pop();
@@ -2377,6 +2500,24 @@ $("#clearGroceryDone").addEventListener("click",async()=>{
   try{ await fetch('/api/shopping/clear-done',{method:'POST'}); }catch(e){/* offline */}
   await loadShopping(); renderGrocery(); renderGroceryEditor();
 });
+$("#groceryPasteAdd").addEventListener("click",async()=>{
+  pop();
+  const ta=$("#groceryPaste"); const n=await groceryAddMany(ta.value);
+  ta.value=""; if(n) pop(true);
+});
+function renderStaplesEditor(){
+  const ta=$("#staplesEditor"); if(ta) ta.value=(staples||[]).join("\n");
+}
+$("#staplesSave").addEventListener("click",async()=>{
+  pop();
+  const lines=$("#staplesEditor").value.split("\n").map(s=>s.trim()).filter(Boolean);
+  try{
+    const r=await fetch('/api/staples/set',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({items:lines})});
+    const j=await r.json(); staples=(j&&j.items)||lines;
+  }catch(e){ staples=lines; }
+  renderStaplesEditor(); renderGrocery(); pop(true);
+});
 
 /* --- add by photo: open a phone window + QR, poll for the snapped photo --- */
 let grqrPoll=null, grqrToken=null;
@@ -2388,7 +2529,7 @@ async function openGroceryQr(){
     const w=await r.json(); grqrToken=w.token;
     $("#grqrImg").src='/api/grocery-qr?token='+w.token+'&_='+Date.now();
     $("#grqrUrl").textContent=w.url;
-    $("#grqrStatus").textContent='waiting for your photo…';
+    $("#grqrStatus").textContent='waiting for a photo or pasted list…';
     clearInterval(grqrPoll); grqrPoll=setInterval(pollGroceryQr,1500);
   }catch(e){
     $("#grqrStatus").innerHTML='<img class="inlineWarn" src="/icons/ui_warn.png" alt=""> couldn’t start — is the box online?';
@@ -2404,10 +2545,14 @@ async function pollGroceryQr(){
       $("#grqrStatus").innerHTML='📷 received — confirm on the wall.';
       setTimeout(()=>{ closeGroceryQr(); pollGroceryReview(); }, 900);
     }else if(!s.open){
+      // window consumed: either it timed out, or a pasted list landed straight
+      // on the list — refresh so any pasted items show right away.
       clearInterval(grqrPoll);
-      $("#grqrStatus").textContent='⌛ window expired — tap “Add by photo” again';
+      $("#grqrStatus").textContent='✓ done — closing…';
+      loadShopping().then(()=>{ renderGrocery(); renderGroceryEditor(); });
+      setTimeout(closeGroceryQr, 1000);
     }else{
-      $("#grqrStatus").textContent=`waiting for your photo…  (${fmtSecs(s.remaining)})`;
+      $("#grqrStatus").textContent=`waiting for a photo or pasted list…  (${fmtSecs(s.remaining)})`;
     }
   }catch(e){/* keep polling; transient */}
 }
@@ -2578,7 +2723,8 @@ setInterval(updateSync, 30*1000);     // keep the "N min ago" label honest
 loadChores().then(renderChores);
 setInterval(()=>{ loadChores().then(renderChores); }, 3*60*1000);
 
-/* load the shared grocery list, then keep it fresh (other devices' edits show up) */
+/* load the shared grocery list + "usuals", then keep them fresh (other devices' edits show up) */
+loadStaples().then(renderGrocery);
 loadShopping().then(renderGrocery);
 setInterval(()=>{ loadShopping().then(renderGrocery); }, 60*1000);
 

@@ -19,6 +19,7 @@ import server
 def client(tmp_path, monkeypatch):
     monkeypatch.setattr(server, "DATA", tmp_path)
     monkeypatch.setattr(server, "SHOPPING_PATH", tmp_path / "shopping.json")
+    monkeypatch.setattr(server, "STAPLES_PATH", tmp_path / "staples.json")
     monkeypatch.setattr(server, "UPLOADS_DIR", tmp_path / "uploads")
     # fresh, closed window + empty review per test (module globals leak otherwise)
     monkeypatch.setattr(server, "grocery_window", {"token": None, "expires_at": 0.0})
@@ -35,7 +36,10 @@ def _items(tmp_path):
 # storage + CRUD
 # --------------------------------------------------------------------------- #
 def test_list_empty_when_absent(client):
-    assert client.get("/api/shopping").get_json() == {"items": []}
+    j = client.get("/api/shopping").get_json()
+    assert j["items"] == []
+    # the section taxonomy travels with the list so the UI can group + label
+    assert any(s["id"] == "produce" for s in j["sections"])
 
 
 def test_add_persists(client, tmp_path):
@@ -193,3 +197,63 @@ def test_dismiss_clears_without_adding(client, tmp_path, monkeypatch):
 
 def test_commit_with_nothing_pending_404s(client):
     assert client.post("/api/grocery/commit", json={"items": []}).status_code == 404
+
+
+# --------------------------------------------------------------------------- #
+# categories, quantities, merge-on-add, bulk paste, staples
+# --------------------------------------------------------------------------- #
+def test_categorize_local_keyword_map():
+    cases = {"Milk": "dairy", "Bananas": "produce", "Frozen pizza": "frozen",
+             "Ice cream": "frozen", "Chicken breast": "meat", "Toilet paper": "household",
+             "Shampoo": "personal", "Sparkling water": "drinks", "Peanut butter": "pantry",
+             "Some gizmo": "other"}
+    for text, cat in cases.items():
+        assert server.categorize(text) == cat, text
+
+
+def test_add_assigns_section_and_qty(client):
+    item = client.post("/api/shopping/add", json={"text": "Milk"}).get_json()["item"]
+    assert item["cat"] == "dairy" and item["qty"] == 1
+
+
+def test_add_merges_duplicate_and_bumps_qty(client, tmp_path):
+    client.post("/api/shopping/add", json={"text": "Milk"})
+    r = client.post("/api/shopping/add", json={"text": "milk"})  # case-insensitive
+    assert r.get_json()["merged"] is True and r.get_json()["item"]["qty"] == 2
+    assert len(_items(tmp_path)) == 1
+
+
+def test_update_qty_and_recategorize_on_rename(client):
+    iid = client.post("/api/shopping/add", json={"text": "thing"}).get_json()["item"]["id"]
+    assert client.post("/api/shopping/update", json={"id": iid, "qty": 3}).get_json()["item"]["qty"] == 3
+    # renaming to a recognizable item re-tags its section
+    r = client.post("/api/shopping/update", json={"id": iid, "text": "Bread"})
+    assert r.get_json()["item"]["cat"] == "bakery"
+    # an explicit cat override sticks
+    r = client.post("/api/shopping/update", json={"id": iid, "cat": "snacks"})
+    assert r.get_json()["item"]["cat"] == "snacks"
+
+
+def test_add_many_from_pasted_text(client, tmp_path):
+    client.post("/api/shopping/add", json={"text": "Milk"})   # already on the list
+    r = client.post("/api/shopping/add-many",
+                    json={"text": "- Milk\n2. Eggs\nBread"})   # bullets/numbers cleaned
+    assert r.get_json()["ok"] is True
+    texts = sorted(it["text"] for it in _items(tmp_path))
+    assert texts == ["Bread", "Eggs", "Milk"]
+    milk = [it for it in _items(tmp_path) if it["text"].lower() == "milk"][0]
+    assert milk["qty"] == 2   # pasted "Milk" merged into the existing one
+
+
+def test_staples_defaults_and_set(client):
+    assert "Milk" in client.get("/api/staples").get_json()["items"]
+    r = client.post("/api/staples/set", json={"items": ["Coffee", "coffee", " Tea "]})
+    assert r.get_json()["items"] == ["Coffee", "Tea"]   # de-duped + trimmed
+    assert client.get("/api/staples").get_json()["items"] == ["Coffee", "Tea"]
+
+
+def test_load_shopping_backfills_legacy_items(client, tmp_path):
+    (tmp_path / "shopping.json").write_text(json.dumps(
+        {"items": [{"id": "g_old", "text": "Milk", "done": False}]}))
+    item = client.get("/api/shopping").get_json()["items"][0]
+    assert item["qty"] == 1 and item["cat"] == "dairy"

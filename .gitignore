@@ -23,4 +23,5 @@ data/chores.json
 uploads/*
 !uploads/.gitkeep
 data/shopping.json
+data/staples.json
 voices/

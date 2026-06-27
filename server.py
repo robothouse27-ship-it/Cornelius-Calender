@@ -39,6 +39,7 @@ FEEDS_PATH = DATA / "feeds.json"
 EXPORT_PATH = DATA / "export.json"   # persistent secret token for the family feed
 CHORES_PATH = DATA / "chores.json"   # box-side chore chart (rotates daily on the wall)
 SHOPPING_PATH = DATA / "shopping.json"  # shared family grocery list (done = server-side)
+STAPLES_PATH = DATA / "staples.json"  # "usuals": one-tap re-add of common items
 UPLOADS_DIR = HERE / "uploads"       # phone-snapped list photos, pending review (gitignored)
 PHOTOS_DIR = HERE / "photos"        # drop family photos here for sleep mode
 ICONS_DIR = HERE / "icons"          # pastel sticker icons (weather/chores/events)
@@ -128,10 +129,94 @@ def new_chore(label, existing):
 
 # --- shared grocery list (one family list; "done" is a server-side boolean so
 #     checking milk clears it on every device) ------------------------------- #
+# Items carry a store SECTION (cat) and a QUANTITY (qty). Sections are a fixed,
+# store-walk-ordered taxonomy so the wall + printed list group the way you shop.
+# (id, label, emoji) — display order is shopping order; "other" is the catch-all.
+GROCERY_SECTIONS = [
+    ("produce",   "Produce",         "🥬"),
+    ("bakery",    "Bakery",          "🥖"),
+    ("meat",      "Meat & Seafood",  "🥩"),
+    ("dairy",     "Dairy & Eggs",    "🥚"),
+    ("frozen",    "Frozen",          "🧊"),
+    ("pantry",    "Pantry",          "🥫"),
+    ("snacks",    "Snacks",          "🍿"),
+    ("drinks",    "Drinks",          "🥤"),
+    ("household", "Household",        "🧽"),
+    ("personal",  "Personal care",   "🧴"),
+    ("other",     "Other",           "🛒"),
+]
+GROCERY_SECTION_IDS = {s[0] for s in GROCERY_SECTIONS}
+
+# Local keyword → section map (free, offline, instant — no API cost). Good enough
+# for groceries; anything unknown falls to "other" and can be re-tagged on the wall.
+# Match order matters: frozen before dairy so "ice cream" doesn't read as "cream".
+_CAT_KEYWORDS = [
+    ("frozen",    ["frozen", "ice cream", "popsicle", "waffle", "frozen pizza"]),
+    ("produce",   ["apple", "banana", "orange", "lemon", "lime", "grape", "berry",
+                   "strawberr", "blueberr", "raspberr", "melon", "watermelon",
+                   "peach", "pear", "plum", "mango", "avocado", "tomato", "potato",
+                   "onion", "garlic", "carrot", "celery", "lettuce", "spinach",
+                   "kale", "broccoli", "cauliflower", "cucumber", "pepper",
+                   "zucchini", "squash", "mushroom", "corn", "peas", "green bean",
+                   "cabbage", "ginger", "cilantro", "parsley", "basil", "herb",
+                   "salad", "fruit", "veggie", "vegetable", "eggplant", "kiwi"]),
+    ("bakery",    ["bread", "bagel", "bun", "roll", "tortilla", "pita", "croissant",
+                   "muffin", "donut", "doughnut", "cake", "pastry", "baguette",
+                   "naan", "english muffin"]),
+    ("meat",      ["chicken", "beef", "steak", "pork", "bacon", "sausage", "turkey",
+                   "ham", "lamb", "fish", "salmon", "tuna steak", "shrimp", "crab",
+                   "cod", "tilapia", "ground", "mince", "meat", "hot dog", "deli"]),
+    ("pantry",    ["rice", "pasta", "noodle", "flour", "sugar", "oil", "vinegar",
+                   "sauce", "ketchup", "mustard", "mayo", "salt", "spice", "cereal",
+                   "oat", "oatmeal", "bean", "lentil", "soup", "canned", "can of",
+                   "peanut butter", "jam", "jelly", "honey", "syrup", "broth",
+                   "stock", "salsa", "granola", "coffee", "tea", "cocoa", "baking"]),
+    ("dairy",     ["milk", "cheese", "yogurt", "yoghurt", "butter", "cream", "egg",
+                   "sour cream", "cottage", "margarine", "half and half", "creamer"]),
+    ("drinks",    ["water", "juice", "soda", "cola", "sparkling", "beer",
+                   "wine", "seltzer", "gatorade", "lemonade", "kombucha", "drink",
+                   "energy drink"]),
+    ("snacks",    ["chip", "cookie", "candy", "chocolate", "cracker", "popcorn",
+                   "pretzel", "snack", "nuts", "trail mix", "granola bar",
+                   "fruit snack", "gum", "jerky"]),
+    ("household", ["paper towel", "toilet paper", "tissue", "napkin", "trash bag",
+                   "detergent", "dish soap", "cleaner", "bleach", "sponge", "foil",
+                   "wrap", "ziploc", "laundry", "fabric softener", "light bulb",
+                   "batteries", "trash"]),
+    ("personal",  ["shampoo", "conditioner", "toothpaste", "toothbrush", "deodorant",
+                   "lotion", "razor", "shaving", "body wash", "floss", "mouthwash",
+                   "cotton", "bandage", "medicine", "vitamin", "sunscreen", "makeup",
+                   "feminine", "diaper", "wipes", "lip balm", "soap"]),
+]
+
+
+def categorize(text):
+    """Best-effort store section for an item name (local, offline)."""
+    t = str(text or "").lower()
+    for cat, kws in _CAT_KEYWORDS:
+        if any(re.search(r"\b" + re.escape(kw), t) for kw in kws):
+            return cat
+    return "other"
+
+
+def _norm_item(it):
+    """Backfill section/qty on items written before this feature."""
+    it["qty"] = max(1, int(it.get("qty", 1) or 1))
+    cat = it.get("cat")
+    if cat not in GROCERY_SECTION_IDS:
+        cat = categorize(it.get("text", ""))
+    it["cat"] = cat
+    it["done"] = bool(it.get("done"))
+    return it
+
+
 def load_shopping():
     if SHOPPING_PATH.exists():
         try:
-            return json.loads(SHOPPING_PATH.read_text())
+            doc = json.loads(SHOPPING_PATH.read_text())
+            for it in doc.get("items", []):
+                _norm_item(it)
+            return doc
         except (ValueError, OSError):
             pass
     return {"items": []}
@@ -144,10 +229,54 @@ def save_shopping(doc):
     os.replace(tmp, SHOPPING_PATH)
 
 
-def new_grocery(text):
+def new_grocery(text, qty=1, cat=None):
+    text = str(text).strip()[:60]
     return {"id": "g_" + uuid.uuid4().hex[:6],
-            "text": str(text).strip()[:60],
+            "text": text,
+            "qty": max(1, int(qty or 1)),
+            "cat": cat if cat in GROCERY_SECTION_IDS else categorize(text),
             "done": False}
+
+
+def add_or_merge(doc, text, qty=1, cat=None):
+    """Add an item, or bump the quantity of a matching un-bought item already on
+    the list (case-insensitive). Returns (item, merged_bool)."""
+    text = str(text).strip()[:60]
+    if not text:
+        return None, False
+    qty = max(1, int(qty or 1))
+    key = text.lower()
+    for it in doc.setdefault("items", []):
+        if not it.get("done") and it.get("text", "").lower() == key:
+            it["qty"] = max(1, int(it.get("qty", 1) or 1)) + qty
+            if cat in GROCERY_SECTION_IDS:
+                it["cat"] = cat
+            return it, True
+    item = new_grocery(text, qty, cat)
+    doc["items"].append(item)
+    return item, False
+
+
+# --- "usuals": a small set of common items you re-add with one tap ---------- #
+DEFAULT_STAPLES = ["Milk", "Eggs", "Bread", "Butter", "Bananas", "Coffee"]
+
+
+def load_staples():
+    if STAPLES_PATH.exists():
+        try:
+            doc = json.loads(STAPLES_PATH.read_text())
+            items = [str(x).strip()[:60] for x in doc.get("items", []) if str(x).strip()]
+            return {"items": items}
+        except (ValueError, OSError):
+            pass
+    return {"items": list(DEFAULT_STAPLES)}
+
+
+def save_staples(doc):
+    fd, tmp = tempfile.mkstemp(dir=str(DATA), suffix=".tmp")
+    with os.fdopen(fd, "w") as fh:
+        json.dump(doc, fh, indent=2)
+    os.replace(tmp, STAPLES_PATH)
 
 
 # --------------------------------------------------------------------------- #
@@ -522,7 +651,10 @@ def chores_delete():
 # --------------------------------------------------------------------------- #
 @app.route("/api/shopping")
 def shopping_list():
-    return jsonify(load_shopping())
+    doc = load_shopping()
+    doc["sections"] = [{"id": i, "label": l, "emoji": e}
+                       for (i, l, e) in GROCERY_SECTIONS]
+    return jsonify(doc)
 
 
 @app.route("/api/shopping/add", methods=["POST"])
@@ -532,10 +664,28 @@ def shopping_add():
     if not text:
         return jsonify({"ok": False, "error": "text required"}), 400
     doc = load_shopping()
-    item = new_grocery(text)
-    doc.setdefault("items", []).append(item)
+    item, merged = add_or_merge(doc, text, body.get("qty", 1), body.get("cat"))
     save_shopping(doc)
-    return jsonify({"ok": True, "item": item})
+    return jsonify({"ok": True, "item": item, "merged": merged})
+
+
+@app.route("/api/shopping/add-many", methods=["POST"])
+def shopping_add_many():
+    """Bulk add from pasted text (or an explicit list). Each line is cleaned,
+    auto-categorized, and merged with any matching item already on the list."""
+    body = request.get_json(force=True, silent=True) or {}
+    if isinstance(body.get("items"), list):
+        names = [str(x) for x in body["items"]]
+    else:
+        names = structure_items(body.get("text", ""))
+    doc = load_shopping()
+    added = []
+    for name in names:
+        item, _ = add_or_merge(doc, name)
+        if item:
+            added.append(item)
+    save_shopping(doc)
+    return jsonify({"ok": True, "added": added, "count": len(added)})
 
 
 @app.route("/api/shopping/update", methods=["POST"])
@@ -546,9 +696,16 @@ def shopping_update():
     for it in doc.get("items", []):
         if it.get("id") == iid:
             if "text" in body:
-                it["text"] = str(body["text"]).strip()[:60] or it["text"]
+                new_text = str(body["text"]).strip()[:60]
+                if new_text and new_text.lower() != it["text"].lower():
+                    it["cat"] = categorize(new_text)   # re-tag on rename
+                it["text"] = new_text or it["text"]
             if "done" in body:
                 it["done"] = bool(body["done"])
+            if "qty" in body:
+                it["qty"] = max(1, int(body.get("qty") or 1))
+            if body.get("cat") in GROCERY_SECTION_IDS:
+                it["cat"] = body["cat"]
             save_shopping(doc)
             return jsonify({"ok": True, "item": it})
     return jsonify({"ok": False, "error": "not found"}), 404
@@ -583,6 +740,26 @@ def shopping_clear_all():
     doc["items"] = []
     save_shopping(doc)
     return jsonify({"ok": True, "removed": before})
+
+
+# --- "usuals" / staples: a curated set you re-add to the list with one tap --- #
+@app.route("/api/staples")
+def staples_list():
+    return jsonify(load_staples())
+
+
+@app.route("/api/staples/set", methods=["POST"])
+def staples_set():
+    """Replace the whole usuals set (the Settings editor saves the full list)."""
+    body = request.get_json(force=True, silent=True) or {}
+    items, seen = [], set()
+    for x in body.get("items", []):
+        t = str(x).strip()[:60]
+        if t and t.lower() not in seen:
+            seen.add(t.lower())
+            items.append(t)
+    save_staples({"items": items})
+    return jsonify({"ok": True, "items": items})
 
 
 # Export the list: a clean printable page a phone can open over WiFi, plus a QR
@@ -665,9 +842,28 @@ def grocery_submit():
     global grocery_review
     token = request.form.get("token", "")
     if token != grocery_window["token"] or not grocery_window_open():
-        return Response(render_result_page(False, "This photo window has closed. "
-                        "Tap “Add by photo” on the wall again."),
+        return Response(render_result_page(False, "This window has closed. "
+                        "Tap “Add from phone” on the wall again."),
                         mimetype="text/html", status=403)
+
+    # Pasted/typed text adds straight to the shared list (no wall review needed).
+    pasted = (request.form.get("list_text", "") or "").strip()
+    if pasted:
+        doc = load_shopping()
+        added = []
+        for name in structure_items(pasted):
+            item, _ = add_or_merge(doc, name)
+            if item:
+                added.append(item)
+        save_shopping(doc)
+        grocery_window["expires_at"] = 0          # consume the window
+        if added:
+            return Response(render_result_page(
+                True, f"Added {len(added)} item{'s' if len(added) != 1 else ''} "
+                "to the list. 🛒"), mimetype="text/html")
+        return Response(render_result_page(False, "Couldn't find any items in that "
+                        "text — try again."), mimetype="text/html", status=400)
+
     photo = request.files.get("photo")
     if not photo or not photo.filename:
         return Response(render_result_page(False, "No photo came through — try again."),
@@ -717,12 +913,9 @@ def grocery_commit():
     doc = load_shopping()
     added = []
     for text in items:
-        text = str(text).strip()
-        if not text:
-            continue
-        item = new_grocery(text)
-        doc.setdefault("items", []).append(item)
-        added.append(item)
+        item, _ = add_or_merge(doc, text)   # auto-categorize + merge dupes
+        if item:
+            added.append(item)
     save_shopping(doc)
     _clear_review(delete_photo=True)
     return jsonify({"ok": True, "added": added})
@@ -1030,21 +1223,66 @@ def render_chore_page(token, ok):
 def render_grocery_page(token, ok):
     if not ok:
         return _page('<div class="big">⌛</div><h1>Window closed</h1>'
-                     '<p class="sub">Tap “Add by photo” on the wall to start again.</p>',
-                     title="Snap a grocery list")
+                     '<p class="sub">Tap “Add from phone” on the wall to start again.</p>',
+                     title="Add to the grocery list")
     return _page(f"""
-      <h1>Snap your list 📷</h1>
-      <p class="sub">Take a photo of a written or printed grocery list. We'll
-      read it and you confirm the items on the wall.</p>
-      <form method="POST" action="/grocery" enctype="multipart/form-data">
+      <h1>Add to the list 🛒</h1>
+      <p class="sub">Snap or pick a photo of a written list, or paste your items —
+      they'll land on the wall.</p>
+
+      <form method="POST" action="/grocery" enctype="multipart/form-data" id="photoForm">
         <input type="hidden" name="token" value="{token}">
-        <label>Photo of the list</label>
-        <input type="file" name="photo" accept="image/*" capture="environment" required>
-        <button type="submit">Send to the wall</button>
+        <label>Photo of a list</label>
+        <label id="drop" class="drop">
+          <input type="file" name="photo" accept="image/*" id="photoInput" hidden>
+          <span id="dropText">📷 Take a photo · choose from library · or drop one here</span>
+        </label>
+        <button type="submit" id="photoBtn" disabled>Send photo to the wall</button>
       </form>
-      <p class="hint">Tip: lay the list flat, fill the frame, and keep it in good
-      light — clearer photos read better.</p>
-    """, title="Snap a grocery list")
+
+      <div class="orline"><span>or</span></div>
+
+      <form method="POST" action="/grocery">
+        <input type="hidden" name="token" value="{token}">
+        <label>Paste a list</label>
+        <textarea name="list_text" rows="6" placeholder="One item per line, e.g.&#10;Milk&#10;Eggs&#10;Bananas"></textarea>
+        <button type="submit">Add these to the list</button>
+      </form>
+
+      <p class="hint">Photos go to the wall to confirm; pasted items are added
+      straight away. For photos: lay the list flat, fill the frame, good light.</p>
+      <style>
+        .drop{{display:flex;align-items:center;justify-content:center;text-align:center;
+          min-height:96px;padding:16px;border:2px dashed #C9BEEC;border-radius:16px;
+          color:var(--soft);font-weight:700;cursor:pointer;background:#FAF8FF}}
+        .drop.has{{border-style:solid;border-color:#46D6B4;color:#2E9E86;background:#F0FBF8}}
+        .drop.over{{border-color:#8B7BD8;background:#F1ECFF}}
+        .orline{{display:flex;align-items:center;gap:10px;color:var(--soft);
+          font-weight:800;font-size:13px;margin:18px 0}}
+        .orline::before,.orline::after{{content:"";flex:1;height:1px;background:var(--line)}}
+        textarea{{width:100%;box-sizing:border-box;border:1.5px solid var(--line);
+          border-radius:14px;padding:12px;font:inherit;font-weight:600;resize:vertical}}
+      </style>
+      <script>
+        const inp=document.getElementById('photoInput'), drop=document.getElementById('drop'),
+              txt=document.getElementById('dropText'), btn=document.getElementById('photoBtn');
+        function refresh(){{
+          if(inp.files && inp.files.length){{
+            drop.classList.add('has'); btn.disabled=false;
+            txt.textContent='✓ '+inp.files[0].name;
+          }}else{{ drop.classList.remove('has'); btn.disabled=true; }}
+        }}
+        inp.addEventListener('change',refresh);
+        ['dragenter','dragover'].forEach(e=>drop.addEventListener(e,ev=>{{
+          ev.preventDefault(); drop.classList.add('over'); }}));
+        ['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{{
+          ev.preventDefault(); drop.classList.remove('over'); }}));
+        drop.addEventListener('drop',ev=>{{
+          if(ev.dataTransfer.files && ev.dataTransfer.files.length){{
+            inp.files=ev.dataTransfer.files; refresh(); }}
+        }});
+      </script>
+    """, title="Add to the grocery list")
 
 
 def render_grocery_list_page(items):
@@ -1054,20 +1292,39 @@ def render_grocery_list_page(items):
     todo = [it for it in items if not it.get("done")]
     done = [it for it in items if it.get("done")]
     today = datetime.now().strftime("%A, %B ") + str(datetime.now().day)
+
+    def _qty(it):
+        q = int(it.get("qty", 1) or 1)
+        return f" ×{q}" if q > 1 else ""
+
     if not items:
         rows = '<li class="empty">The list is empty right now.</li>'
     else:
-        rows = "".join(
-            f'<li>{html.escape(str(it.get("text", "")))}</li>' for it in todo)
+        rows = ""
+        # group un-bought items under store sections, in shopping order
+        for cat, label, emoji in GROCERY_SECTIONS:
+            grp = [it for it in todo if it.get("cat", "other") == cat]
+            if not grp:
+                continue
+            rows += f'<li class="ghdr">{emoji} {html.escape(label)}</li>'
+            rows += "".join(
+                f'<li>{html.escape(str(it.get("text", "")))}'
+                f'<span class="qty">{_qty(it)}</span></li>' for it in grp)
         rows += "".join(
-            f'<li class="got">{html.escape(str(it.get("text", "")))}</li>'
-            for it in done)
+            f'<li class="got">{html.escape(str(it.get("text", "")))}'
+            f'<span class="qty">{_qty(it)}</span></li>' for it in done)
     n = len(todo)
     sub = (f"{n} item{'s' if n != 1 else ''} to get"
            if n else "Everything's checked off 🎉")
-    # plain-text version powering Copy / Share (json-encoded → safe JS string)
-    lines = ["🛒 Grocery list"] + [f"• {it.get('text', '')}" for it in todo] + \
-            [f"✓ {it.get('text', '')}" for it in done]
+    # plain-text version powering Copy / Share — grouped by section (safe JS string)
+    lines = ["🛒 Grocery list"]
+    for cat, label, emoji in GROCERY_SECTIONS:
+        grp = [it for it in todo if it.get("cat", "other") == cat]
+        if not grp:
+            continue
+        lines.append(f"\n{emoji} {label}")
+        lines += [f"• {it.get('text', '')}{_qty(it)}" for it in grp]
+    lines += [f"✓ {it.get('text', '')}{_qty(it)}" for it in done]
     list_text = json.dumps("\n".join(lines))
     return _page(f"""
       <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
@@ -1076,9 +1333,9 @@ def render_grocery_list_page(items):
       <p class="sub">{sub}</p>
       <ul class="glist">{rows}</ul>
       <div class="grow">
-        <button class="gbtn" id="gcopy">📋 Copy text</button>
-        <button class="gbtn" id="gshare">📤 Share</button>
-        <button class="gbtn gprimary" onclick="window.print()">🖨️ Print</button>
+        <button class="gbtn gprimary" id="gshare">📤 Share</button>
+        <button class="gbtn" id="gcopy">📋 Copy</button>
+        <button class="gbtn" onclick="window.print()">🖨️ Print</button>
       </div>
       <p class="hint">A snapshot from the wall — re-scan the code on the wall for
       the latest list.</p>
@@ -1109,6 +1366,11 @@ def render_grocery_list_page(items):
           padding:13px 6px 13px 36px;border-bottom:1px solid var(--line);position:relative}}
         .glist li::before{{content:"";position:absolute;left:4px;top:50%;width:19px;height:19px;
           margin-top:-10px;border:2px solid #C9BEEC;border-radius:6px}}
+        .glist li.ghdr{{font-family:"Fredoka",sans-serif;font-weight:700;font-size:14px;
+          color:var(--soft);text-transform:uppercase;letter-spacing:.04em;
+          padding:16px 6px 5px;border-bottom:0}}
+        .glist li.ghdr::before{{display:none}}
+        .qty{{color:var(--soft);font-weight:800;font-size:14px;margin-left:6px}}
         .glist li.got{{color:var(--soft);text-decoration:line-through}}
         .glist li.got::before{{content:"✓";color:#46D6B4;border-color:#46D6B4;font-weight:900;
           font-size:13px;text-align:center;line-height:16px;text-decoration:none}}
