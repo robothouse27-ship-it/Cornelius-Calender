@@ -15,6 +15,7 @@
 onnxruntime>=1.17       # wake word (always local)
 openwakeword<0.6        # wake word (always local)
 sounddevice>=0.4        # mic capture (always local)
-webrtcvad>=2.0          # end-of-speech detection (record until you stop talking)
+webrtcvad-wheels>=2.0   # end-of-speech detection; prebuilt wheels (plain webrtcvad
+                        # needs a C toolchain the wall lacks). Imports as `webrtcvad`.
 faster-whisper>=1.0     # local STT fallback (cloud is primary)
 piper-tts>=1.2          # local TTS fallback (cloud is primary)
