@@ -263,6 +263,61 @@
   .chore-person:first-child{margin-top:0;}
   .chore-person .who{display:inline-block;font-weight:800;font-size:12.5px;padding:4px 11px;border-radius:11px;color:#fff;}
   .chore-person + .chore{margin-left:6px;}
+
+  /* First Five — kids' morning routine */
+  #w-firstfive .w-body{padding-top:4px;}
+  .ff-avatar{position:relative;border-radius:50%;display:grid;place-items:center;overflow:hidden;
+    flex:none;background:#fff;box-shadow:inset 0 0 0 3px var(--kid,#E6E0F5);
+    width:clamp(52px,7vw,92px);height:clamp(52px,7vw,92px);}
+  .ff-avatar img{width:100%;height:100%;object-fit:cover;}
+  .ff-avatar .ff-emoji{font-size:clamp(30px,4vw,54px);line-height:1;}
+  .ff-avatar:not(.noimg) .ff-emoji{display:none;}
+  .ff-avatar.sm{width:32px;height:32px;box-shadow:inset 0 0 0 2px var(--kid,#E6E0F5);}
+  .ff-avatar.sm .ff-emoji{font-size:18px;}
+  /* compact tile */
+  .ff-tile-title{font-family:"Fredoka";font-weight:600;font-size:18px;margin:2px 4px 9px;}
+  .ff-tile-kids{display:flex;flex-direction:column;gap:7px;}
+  .ff-tile-kid{display:flex;align-items:center;gap:9px;background:#FBFAFF;border-radius:13px;padding:6px 10px;font-weight:800;font-size:13px;}
+  .ff-tile-kid.done{background:var(--butter-soft);box-shadow:inset 0 0 0 2px var(--butter);}
+  .ff-tk-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .ff-tk-n{color:var(--ink-soft);font-size:14px;flex:none;}
+  /* focused board */
+  .ff-focus{height:100%;display:flex;flex-direction:column;}
+  .ff-title{font-family:"Fredoka";font-weight:600;text-align:center;letter-spacing:.5px;
+    font-size:clamp(30px,5vw,64px);line-height:1;margin:0 0 clamp(8px,2vh,20px);
+    background:var(--grad-hero);-webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 3px 6px rgba(150,110,220,.28));}
+  .ff-grid{flex:1;min-height:0;display:grid;grid-template-columns:repeat(4,1fr);gap:clamp(8px,1.4vw,18px);}
+  .ff-kid{position:relative;display:flex;flex-direction:column;align-items:center;overflow:hidden;
+    background:#FBFAFF;border-radius:24px;padding:clamp(10px,1.6vh,18px) clamp(8px,1vw,14px);
+    box-shadow:var(--shadow-soft);border:3px solid transparent;transition:background .3s,border-color .3s,box-shadow .3s;}
+  .ff-kid.done{border-color:var(--butter);background:linear-gradient(160deg,#FFF6E2,#FFFDF7);
+    animation:ffGold 1.5s ease-in-out infinite;}
+  @keyframes ffGold{0%,100%{box-shadow:0 0 0 4px rgba(255,196,77,.35),0 14px 36px rgba(255,196,77,.40);}
+    50%{box-shadow:0 0 0 7px rgba(255,196,77,.55),0 18px 46px rgba(255,196,77,.62);}}
+  .ff-sparkle{position:absolute;top:8px;right:11px;font-size:clamp(18px,2.4vw,30px);
+    opacity:0;transform:scale(.4) rotate(-15deg);transition:.3s;pointer-events:none;}
+  .ff-kid.done .ff-sparkle{opacity:1;animation:ffSpark 1.6s ease-in-out infinite;}
+  @keyframes ffSpark{0%,100%{transform:scale(1) rotate(-8deg);}50%{transform:scale(1.28) rotate(10deg);}}
+  .ff-name{font-family:"Fredoka";font-weight:600;font-size:clamp(16px,1.8vw,26px);margin:6px 0 8px;
+    max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .ff-mood{display:flex;flex-wrap:wrap;justify-content:center;gap:clamp(4px,.6vw,8px);margin-bottom:clamp(8px,1.4vh,14px);}
+  .ff-mood-btn{position:relative;border:0;background:#fff;border-radius:50%;cursor:pointer;line-height:1;padding:0;overflow:hidden;
+    width:clamp(40px,4.6vw,62px);height:clamp(40px,4.6vw,62px);font-size:clamp(18px,2.2vw,28px);display:grid;place-items:center;
+    box-shadow:inset 0 0 0 2px var(--line);transition:transform .15s,box-shadow .15s,filter .15s;
+    filter:grayscale(.5);opacity:.66;}
+  .ff-mood-btn img{width:100%;height:100%;object-fit:cover;display:block;}
+  .ff-mood-btn:not(.noimg) .ff-emoji{display:none;}
+  .ff-mood-btn:hover{transform:scale(1.08);opacity:.85;}
+  .ff-mood-btn.sel{box-shadow:inset 0 0 0 4px var(--kid,#A98CFF);filter:none;opacity:1;transform:scale(1.13);}
+  .ff-items{width:100%;display:flex;flex-direction:column;gap:clamp(4px,.8vh,8px);}
+  .ff-item{margin-bottom:0;cursor:pointer;padding:clamp(7px,1vh,11px) clamp(8px,1vw,12px);}
+  .ff-item .ff-iemoji{font-size:clamp(15px,1.6vw,22px);line-height:1;}
+  .ff-item .label{font-size:clamp(12px,1.2vw,17px);}
+  .ff-item.done{background:var(--butter-soft);}
+  .ff-item.done .check{background:var(--butter);border-color:var(--butter);color:#fff;}
+  .ff-edit-face{flex:none;width:42px;height:42px;border-radius:50%;overflow:hidden;background:#fff;box-shadow:inset 0 0 0 2px var(--line);display:grid;place-items:center;}
+  .ff-edit-face img{width:100%;height:100%;object-fit:cover;}
   .chore + .chore{margin-left:6px;}
   .chore .cicon{width:30px;height:30px;object-fit:contain;flex:0 0 auto;}
   .arow .eicon{width:26px;height:26px;object-fit:contain;flex:0 0 auto;margin-right:2px;}
@@ -502,6 +557,11 @@
       <span class="w-title"><span class="hemoji">⏳</span>Countdowns</span></header>
     <div class="w-body"><div class="cd" id="countdowns"></div></div>
   </section>
+  <section class="widget card" id="w-firstfive" data-w="firstfive">
+    <header class="w-head"><span class="w-grip" aria-hidden="true">⠿</span>
+      <span class="w-title"><span class="hemoji">🌅</span>First Five</span></header>
+    <div class="w-body"><div id="firstfive"></div></div>
+  </section>
 </div>
 
 <button class="fab" id="fab">+</button>
@@ -550,6 +610,7 @@
         <button class="set-tab" data-tab="people"><span>🙂</span> People</button>
         <button class="set-tab" data-tab="chores"><span>🧹</span> Chores</button>
         <button class="set-tab" data-tab="countdowns"><span>⏳</span> Countdowns</button>
+        <button class="set-tab" data-tab="firstfive"><span>🌅</span> First Five</button>
         <button class="set-tab" data-tab="calendars"><span>📅</span> Calendars</button>
       </nav>
       <div class="set-content">
@@ -578,6 +639,12 @@
           <p class="set-hint">Count down to trips, birthdays &amp; holidays.</p>
           <div id="cdEditor"></div>
           <button class="btn" id="addCountdown">⏳ Add a countdown</button>
+        </section>
+        <section class="set-panel" data-panel="firstfive">
+          <h3>First Five</h3>
+          <p class="set-hint">The kids' morning routine — five steps each: breakfast, dressed, hair, teeth, shoes. Name each kid, pick a color, and choose their cartoon face set. They tap a feeling (Content · Happy · Tired · Surprised · Sad · Angry) and check off their five.</p>
+          <div id="ffKidEditor"></div>
+          <button class="btn" id="addFfKid">🧒 Add a kid</button>
         </section>
         <section class="set-panel" data-panel="calendars">
           <h3>Calendars &amp; colors</h3>
@@ -1031,8 +1098,8 @@ function evChip(e){ // compact chip (month/week)
    DASHBOARD  — one big focus widget + a rail of tappable, draggable
    tiles. State {focus, order} persists so it survives a reboot.
    ============================================================ */
-const WIDGETS=['calendar','today','chores','family','countdowns'];
-let layout=store.get('layout',{focus:'calendar',order:['today','chores','family','countdowns']});
+const WIDGETS=['calendar','today','chores','family','countdowns','firstfive'];
+let layout=store.get('layout',{focus:'calendar',order:['firstfive','today','chores','family','countdowns']});
 function saveLayout(){ store.set('layout',layout); }
 function widgetEl(w){ return document.getElementById('w-'+w); }
 function normalizeLayout(){
@@ -1051,6 +1118,7 @@ function relayout(){
   saveLayout();
   renderCalendar();      // full vs mini depending on focus
   renderCountdowns();    // big timer vs compact list depending on focus
+  renderFirstFive();     // big board vs compact summary depending on focus
 }
 function promote(w){
   if(w===layout.focus) return;
@@ -1340,6 +1408,135 @@ function renderFamily(){
 }
 
 /* ============================================================
+   FIRST FIVE — each kid's 5-step morning routine + a mood.
+   Checking all five lights the card up gold. Everything is
+   keyed by today's date, so it resets fresh each morning
+   (a midnight timer re-renders + prunes even with no reboot).
+   ============================================================ */
+function todayKey(){ const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function ffEsc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+const FIRST_FIVE_ITEMS=[
+  {id:'breakfast',label:'Eat breakfast',emoji:'🥣'},
+  {id:'dressed',  label:'Get dressed',  emoji:'👕'},
+  {id:'hair',     label:'Brush hair',   emoji:'💇'},
+  {id:'teeth',    label:'Brush teeth',  emoji:'🪥'},
+  {id:'shoes',    label:'Put on shoes', emoji:'👟'},
+];
+// Six feelings, in the order of the cartoon face sheet's columns. Each kid has
+// their own face per feeling at /kids/<set>_<id>.png; the emoji is a fallback.
+const FF_FEELINGS=[
+  {id:'content',  label:'Content',  emoji:'😌'},
+  {id:'happy',    label:'Happy',    emoji:'😀'},
+  {id:'tired',    label:'Tired',    emoji:'😴'},
+  {id:'surprised',label:'Surprised',emoji:'😲'},
+  {id:'sad',      label:'Sad',      emoji:'😢'},
+  {id:'angry',    label:'Angry',    emoji:'😠'},
+];
+// Ring colors match each kid's shirt on the face sheet (red, blue, green, yellow).
+const FF_COLORS=["#E5484D","#2F7BE5","#34B27B","#F2B705"];
+const FF_SETS=["k1","k2","k3","k4"];
+const FF_KIDS_DEFAULT=[1,2,3,4].map((n,i)=>({id:'k'+n,name:'Kid '+n,color:FF_COLORS[i],set:FF_SETS[i]}));
+
+let ffKids=store.get('ff_kids',FF_KIDS_DEFAULT);
+let ffDone=store.get('ff_done',{});     // {"kidId|itemId": "YYYY-MM-DD"}
+let ffMood=store.get('ff_mood',{});     // {"kidId": {date, mood:<feelingId>}}
+function saveFfKids(){ store.set('ff_kids',ffKids); }
+function saveFfDone(){ store.set('ff_done',ffDone); }
+function saveFfMood(){ store.set('ff_mood',ffMood); }
+
+function ffPruneStale(){
+  const t=todayKey(); let changed=false;
+  for(const k in ffDone){ if(ffDone[k]!==t){ delete ffDone[k]; changed=true; } }
+  for(const k in ffMood){ if(!ffMood[k]||ffMood[k].date!==t){ delete ffMood[k]; changed=true; } }
+  if(changed){ saveFfDone(); saveFfMood(); }
+}
+function ffItemDone(kidId,itemId){ return ffDone[kidId+'|'+itemId]===todayKey(); }
+function ffCount(kidId){ return FIRST_FIVE_ITEMS.filter(it=>ffItemDone(kidId,it.id)).length; }
+function ffMoodOf(kidId){ const m=ffMood[kidId]; return (m&&m.date===todayKey())?m.mood:''; }   // '' = unset
+function ffFeel(id){ return FF_FEELINGS.find(f=>f.id===id)||FF_FEELINGS[0]; }
+/* a kid's face for one feeling: cartoon image with emoji fallback on 404 */
+function ffFaceInner(k,feelId){
+  const f=ffFeel(feelId);
+  const img=k.set?`<img src="/kids/${encodeURIComponent(k.set+'_'+feelId)}.png" alt="${f.label}" onerror="this.parentNode.classList.add('noimg');this.remove();">`:'';
+  return img+`<span class="ff-emoji">${f.emoji}</span>`;
+}
+function ffAvatarHTML(k,small){
+  const feel=ffMoodOf(k.id)||'content';     // resting face is Content
+  const cls='ff-avatar'+(small?' sm':'')+(k.set?'':' noimg');
+  return `<div class="${cls}" style="--kid:${k.color}">${ffFaceInner(k,feel)}</div>`;
+}
+
+function renderFirstFive(){
+  const wrap=$("#firstfive"); if(!wrap) return;
+  ffPruneStale();
+  const focused=(typeof layout==="object" && layout.focus==='firstfive');
+  if(!focused){
+    wrap.className='ff-tile';
+    wrap.innerHTML=`<div class="ff-tile-title">First Five</div>`+
+      `<div class="ff-tile-kids">`+ffKids.map(k=>{
+        const n=ffCount(k.id);
+        return `<div class="ff-tile-kid${n===FIRST_FIVE_ITEMS.length?' done':''}">`+
+          ffAvatarHTML(k,true)+
+          `<span class="ff-tk-name">${ffEsc(k.name)}</span>`+
+          `<span class="ff-tk-n">${n}/${FIRST_FIVE_ITEMS.length}</span></div>`;
+      }).join('')+`</div>`;
+    return;
+  }
+  wrap.className='ff-focus';
+  wrap.innerHTML=`<div class="ff-title">First Five</div><div class="ff-grid"></div>`;
+  const grid=wrap.querySelector('.ff-grid');
+  const t=todayKey();
+  ffKids.forEach(k=>{
+    const allDone=ffCount(k.id)===FIRST_FIVE_ITEMS.length;
+    const card=document.createElement('div');
+    card.className='ff-kid'+(allDone?' done':'');
+    card.style.setProperty('--kid',k.color);
+    const curMood=ffMoodOf(k.id);
+    card.innerHTML=
+      `<div class="ff-sparkle">✨</div>`+
+      ffAvatarHTML(k,false)+
+      `<div class="ff-name">${ffEsc(k.name)}</div>`+
+      `<div class="ff-mood">`+FF_FEELINGS.map(f=>
+        `<button class="ff-mood-btn${f.id===curMood?' sel':''}${k.set?'':' noimg'}" data-m="${f.id}" title="${f.label}" style="--kid:${k.color}">${ffFaceInner(k,f.id)}</button>`
+      ).join('')+`</div>`+
+      `<div class="ff-items">`+FIRST_FIVE_ITEMS.map(it=>{
+        const d=ffItemDone(k.id,it.id);
+        return `<div class="ff-item chore${d?' done':''}" data-i="${it.id}"><div class="check">✓</div><span class="ff-iemoji">${it.emoji}</span><div class="label">${it.label}</div></div>`;
+      }).join('')+`</div>`;
+    card.querySelectorAll('.ff-mood-btn').forEach(b=>b.addEventListener('click',e=>{
+      e.stopPropagation();
+      const m=b.dataset.m, cur=ffMood[k.id];
+      if(cur&&cur.date===t&&cur.mood===m) delete ffMood[k.id];   // tap again to clear
+      else ffMood[k.id]={date:t,mood:m};
+      saveFfMood(); pop(); renderFirstFive();
+    }));
+    card.querySelectorAll('.ff-item').forEach(row=>row.addEventListener('click',e=>{
+      e.stopPropagation();
+      const key=k.id+'|'+row.dataset.i, was=ffDone[key]===t;
+      const wasAll=ffCount(k.id)===FIRST_FIVE_ITEMS.length;
+      if(was) delete ffDone[key]; else ffDone[key]=t;
+      saveFfDone();
+      const nowAll=ffCount(k.id)===FIRST_FIVE_ITEMS.length;
+      renderFirstFive();
+      if(nowAll && !wasAll){ confettiBurst(); pop(true); }
+      else if(!was){ pop(true); }
+    }));
+    grid.appendChild(card);
+  });
+}
+
+/* Roll over at 00:00 so the board is fresh each morning even if the wall
+   never reboots. Fires a few seconds past midnight to dodge clock jitter. */
+let ffMidnightTimer=null;
+function scheduleMidnightRollover(){
+  if(ffMidnightTimer) clearTimeout(ffMidnightTimer);
+  const now=new Date();
+  const next=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1,0,0,3,0);
+  ffMidnightTimer=setTimeout(()=>{ ffPruneStale(); renderFirstFive(); scheduleMidnightRollover(); }, Math.max(1000,next-now));
+}
+
+/* ============================================================
    CLOCK + GREETING
    ============================================================ */
 function tick(){
@@ -1522,7 +1719,7 @@ $("#soundBtn").addEventListener("click",()=>{soundOn=!soundOn;store.set('sound',
    ============================================================ */
 function liveRefresh(){
   if(pickFam>=FAMILY.length)pickFam=0;
-  renderCalendar();renderAgenda();renderChores();renderFamily();renderCountdowns();
+  renderCalendar();renderAgenda();renderChores();renderFamily();renderCountdowns();renderFirstFive();
   if($("#modal").classList.contains("on"))buildSwatches();
 }
 function renderThemePicker(){
@@ -1724,12 +1921,47 @@ function addCountdown(){
 }
 $("#addCountdown").addEventListener("click",()=>{pop();addCountdown();});
 
+/* First Five editor: name + color + avatar (emoji or cartoon filename) per kid,
+   plus the six feeling faces. */
+function renderFirstFiveEditor(){
+  const wrap=$("#ffKidEditor");
+  if(!wrap) return;
+  wrap.innerHTML="";
+  if(!ffKids.length){ wrap.innerHTML=`<div class="empty" style="padding:8px 4px">No kids yet — add one to build their morning routine.</div>`; return; }
+  ffKids.forEach((k,i)=>{
+    const row=document.createElement("div");row.className="fam-edit";
+    const opts=FF_SETS.map(s=>`<option value="${s}"${k.set===s?' selected':''}>Faces ${s.slice(1)}</option>`).join('');
+    row.innerHTML=`<span class="ff-edit-face"><img src="/kids/${k.set||'k1'}_content.png" alt="" onerror="this.style.display='none'"></span>
+      <input type="color" value="${k.color}">
+      <input type="text" value="${ffEsc(k.name)}" maxlength="20" placeholder="Name">
+      <select title="Which cartoon faces">${opts}</select>
+      <button class="del" title="Remove"><img class="ctrlIcon" src="/icons/ui_delete.png" alt="Remove"></button>`;
+    const face=row.querySelector('.ff-edit-face img');
+    const color=row.querySelector('input[type=color]');
+    const name=row.querySelector('input[type=text]');
+    const set=row.querySelector('select');
+    const del=row.querySelector('.del');
+    color.addEventListener("change",()=>{ k.color=color.value; saveFfKids(); renderFirstFive(); });
+    name.addEventListener("change",()=>{ k.name=name.value.trim()||k.name; saveFfKids(); renderFirstFive(); });
+    set.addEventListener("change",()=>{ k.set=set.value; if(face){face.src='/kids/'+k.set+'_content.png';face.style.display='';} saveFfKids(); renderFirstFive(); });
+    del.addEventListener("click",()=>{ pop(); ffKids.splice(i,1); saveFfKids(); renderFirstFiveEditor(); renderFirstFive(); });
+    wrap.appendChild(row);
+  });
+}
+function addFfKid(){
+  const n=ffKids.length+1;
+  ffKids.push({id:'k'+Math.random().toString(36).slice(2,7),name:'Kid '+n,
+    color:FF_COLORS[(n-1)%FF_COLORS.length],set:FF_SETS[(n-1)%FF_SETS.length]});
+  saveFfKids(); renderFirstFiveEditor(); renderFirstFive(); pop(true);
+}
+$("#addFfKid").addEventListener("click",()=>{pop();addFfKid();});
+
 function setTab(name){
   document.querySelectorAll('.set-tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===name));
   document.querySelectorAll('.set-panel').forEach(p=>p.classList.toggle('active',p.dataset.panel===name));
 }
 $("#setNav").addEventListener("click",e=>{ const t=e.target.closest('.set-tab'); if(t){ pop(); setTab(t.dataset.tab); } });
-$("#settingsBtn").addEventListener("click",()=>{pop();$("#settings").classList.add("on");setTab('appearance');renderThemePicker();renderCountdownEditor();loadChores().then(()=>{renderChoreEditor();renderChores();});loadFeeds().then(()=>{renderPeopleEditor();renderFeedEditor();});});
+$("#settingsBtn").addEventListener("click",()=>{pop();$("#settings").classList.add("on");setTab('appearance');renderThemePicker();renderCountdownEditor();renderFirstFiveEditor();loadChores().then(()=>{renderChoreEditor();renderChores();});loadFeeds().then(()=>{renderPeopleEditor();renderFeedEditor();});});
 $("#sDone").addEventListener("click",()=>{pop();closeEmojiPicker();$("#settings").classList.remove("on");});
 $("#settings").addEventListener("click",e=>{if(e.target.id==="settings"){pop();closeEmojiPicker();$("#settings").classList.remove("on");}});
 
@@ -1943,7 +2175,8 @@ function checkReminders(){
 applyTheme(themeKey);
 tick();setInterval(tick,1000);
 setInterval(tickCountdown,1000);   // live countdown timer when focused
-renderAgenda();renderChores();renderFamily();renderCountdowns();
+renderAgenda();renderChores();renderFamily();renderCountdowns();renderFirstFive();
+scheduleMidnightRollover();  // First Five resets fresh each morning at 00:00
 buildDashboard();            // place widgets into focus/rail + render calendar
 updateSoundBtn();resetIdle();
 

@@ -39,6 +39,7 @@ EXPORT_PATH = DATA / "export.json"   # persistent secret token for the family fe
 CHORES_PATH = DATA / "chores.json"   # box-side chore chart (rotates daily on the wall)
 PHOTOS_DIR = HERE / "photos"        # drop family photos here for sleep mode
 ICONS_DIR = HERE / "icons"          # pastel sticker icons (weather/chores/events)
+KIDS_DIR = HERE / "kids"            # cartoon avatars for the First Five widget
 INDEX = HERE / "family-calendar.html"
 PORT = 8080
 WINDOW_SECS = 120  # how long an add-window stays open
@@ -962,6 +963,15 @@ def photo_file(fn):
 def icon_file(fn):
     p = (ICONS_DIR / fn).resolve()
     if ICONS_DIR not in p.parents or not p.is_file():   # no path traversal
+        abort(404)
+    return send_file(p)
+
+
+@app.route("/kids/<path:fn>")
+def kid_file(fn):
+    """Cartoon kid avatars for the First Five widget. 404 → widget shows emoji."""
+    p = (KIDS_DIR / fn).resolve()
+    if KIDS_DIR not in p.parents or not p.is_file():    # no path traversal
         abort(404)
     return send_file(p)
 
