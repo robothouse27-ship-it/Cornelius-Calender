@@ -291,6 +291,15 @@ def record_until_silence(stream):
         log("webrtcvad not installed — using a fixed 4s window")
         max_frames = int(4000 / frame_ms)
     silence_limit = int(800 / frame_ms)                   # stop after ~800ms quiet
+    # Drop audio buffered while the wake word matched + "Yes?" played, otherwise
+    # we'd replay that stale chunk (speaker echo + silence) and the VAD would end
+    # the capture before the speaker actually says anything.
+    try:
+        stale = stream.read_available
+        if stale:
+            stream.read(stale)
+    except Exception:
+        pass
     collected = bytearray()
     silent = n = 0
     while True:
@@ -307,6 +316,7 @@ def record_until_silence(stream):
                 break
         if n >= max_frames:
             break
+    log("captured %.1fs of audio" % (len(collected) / 2 / SAMPLE_RATE))
     return bytes(collected)
 
 
