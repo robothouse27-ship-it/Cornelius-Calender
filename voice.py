@@ -35,7 +35,7 @@ from datetime import datetime, timedelta
 HERE = os.path.dirname(os.path.abspath(__file__))
 API_BASE = f"http://127.0.0.1:{os.environ.get('FAMILYCAL_PORT', '8080')}"
 WAKE_WORD = os.environ.get("FAMILYCAL_WAKE_WORD", "hey_jarvis")  # an openWakeWord model name
-WAKE_THRESHOLD = float(os.environ.get("FAMILYCAL_WAKE_THRESHOLD", "0.6"))
+WAKE_THRESHOLD = float(os.environ.get("FAMILYCAL_WAKE_THRESHOLD", "0.5"))
 WHISPER_MODEL = os.environ.get("FAMILYCAL_WHISPER_MODEL", "tiny.en")
 SAMPLE_RATE = 16000          # what openWakeWord + Whisper + Deepgram expect
 TZ = os.environ.get("FAMILYCAL_TZ", "America/Los_Angeles")
@@ -421,16 +421,19 @@ def main():
     log("listening for", repr(effective_wake), "(threshold", WAKE_THRESHOLD, ")…")
 
     block = int(SAMPLE_RATE * 0.08)              # 80 ms frames for the wake detector
-    consec = 0                                   # consecutive frames over threshold
+    peak = 0.0                                   # for calibration logging
     with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="int16",
                         blocksize=block) as stream:
         while True:
             frame, _ = stream.read(block)
             scores = wake.predict(frame[:, 0])
             score = scores.get(effective_wake, 0.0)
-            consec = consec + 1 if score > WAKE_THRESHOLD else 0
-            if consec >= 2:                       # debounce: need 2 frames in a row
-                consec = 0
+            if score > 0.3:                       # log near-misses so we can tune
+                if score > peak:
+                    peak = score
+                    log("wake score %.2f" % score)
+            if score > WAKE_THRESHOLD:            # fire on a single frame over threshold
+                peak = 0.0
                 log("wake! (score %.2f)" % score)
                 speak("Yes?")
                 pcm = record_until_silence(stream)   # record until you stop talking
