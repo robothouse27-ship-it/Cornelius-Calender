@@ -23,12 +23,20 @@ if [ -z "$BROWSER" ]; then
   exit 1
 fi
 
+# A dedicated, PERSISTENT profile. Do NOT use --incognito here: incognito drops
+# all localStorage when the browser process exits, so everything the wall saves
+# client-side (countdowns, theme, widget layout, First Five kids/moods, chore
+# check-marks) would vanish on every reboot. A stable --user-data-dir keeps it.
+PROFILE="$HOME/.config/familycal-kiosk"
+mkdir -p "$PROFILE"
+
 exec "$BROWSER" \
   --kiosk \
   --noerrdialogs \
   --disable-infobars \
   --disable-session-crashed-bubble \
-  --incognito \
+  --disable-features=Translate \
+  --user-data-dir="$PROFILE" \
   --overscroll-history-navigation=0 \
   --check-for-update-interval=31536000 \
   "$URL"
