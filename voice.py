@@ -275,48 +275,63 @@ def _pcm16_to_wav_bytes(pcm, rate=SAMPLE_RATE):
     return buf.getvalue()
 
 
+def _rms(samples):
+    """Root-mean-square loudness of an int16 numpy frame."""
+    import numpy as np
+    f = samples.astype(np.float32)
+    return float(np.sqrt(np.mean(f * f))) if f.size else 0.0
+
+
 def record_until_silence(stream):
     """Read 16k mono int16 frames from an open InputStream until the speaker
-    stops talking. Returns raw PCM16 bytes. Falls back to a fixed window if
-    webrtcvad isn't installed."""
+    stops talking, using an energy gate calibrated to the room's noise floor
+    (webrtcvad's fixed model treated kitchen noise as endless speech). Returns
+    raw PCM16 bytes."""
     frame_ms = 20
     frame_len = int(SAMPLE_RATE * frame_ms / 1000)        # 320 samples @ 16k
-    min_frames = int(1500 / frame_ms)                     # speak for ≥1.5s
-    max_frames = int(12000 / frame_ms)                    # hard cap ~12s
-    try:
-        import webrtcvad
-        vad = webrtcvad.Vad(2)                            # 0 lax … 3 strict
-    except ImportError:
-        vad = None
-        log("webrtcvad not installed — using a fixed 4s window")
-        max_frames = int(4000 / frame_ms)
     silence_limit = int(800 / frame_ms)                   # stop after ~800ms quiet
+    no_speech_giveup = int(3000 / frame_ms)               # nothing said in 3s → bail
+    max_frames = int(10000 / frame_ms)                    # hard cap ~10s
+
     # Drop audio buffered while the wake word matched + "Yes?" played, otherwise
-    # we'd replay that stale chunk (speaker echo + silence) and the VAD would end
-    # the capture before the speaker actually says anything.
+    # we'd replay that stale chunk (speaker echo) and mis-detect the end.
     try:
         stale = stream.read_available
         if stale:
             stream.read(stale)
     except Exception:
         pass
+
+    # Calibrate a noise floor from ~200 ms of ambient, then treat anything
+    # comfortably above it as speech. Adapts to whatever room it's in.
+    floor = 0.0
+    cal = 10
+    for _ in range(cal):
+        frame, _ = stream.read(frame_len)
+        floor += _rms(frame[:, 0])
+    floor /= cal
+    speech_thresh = max(floor * 3.0, 250.0)               # 3× ambient, absolute min
+
     collected = bytearray()
     silent = n = 0
+    had_speech = False
     while True:
         frame, _ = stream.read(frame_len)
-        pcm = frame[:, 0].tobytes()
-        collected += pcm
+        collected += frame[:, 0].tobytes()
         n += 1
-        if vad is not None:
-            if vad.is_speech(pcm, SAMPLE_RATE):
-                silent = 0
-            else:
-                silent += 1
-            if n >= min_frames and silent >= silence_limit:
-                break
-        if n >= max_frames:
+        if _rms(frame[:, 0]) >= speech_thresh:
+            had_speech = True
+            silent = 0
+        else:
+            silent += 1
+        if had_speech and silent >= silence_limit:        # speaker finished
             break
-    log("captured %.1fs of audio" % (len(collected) / 2 / SAMPLE_RATE))
+        if not had_speech and n >= no_speech_giveup:      # never started
+            break
+        if n >= max_frames:                               # safety cap
+            break
+    log("captured %.1fs (floor %.0f, thresh %.0f, speech=%s)" %
+        (len(collected) / 2 / SAMPLE_RATE, floor, speech_thresh, had_speech))
     return bytes(collected)
 
 
