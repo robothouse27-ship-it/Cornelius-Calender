@@ -218,7 +218,9 @@ def read_cloud(path):
     import base64
     import anthropic
 
-    model = os.environ.get("FAMILYCAL_VISION_MODEL", "claude-opus-4-8")
+    # Haiku reads a grocery list well and is ~5x cheaper than Opus; override
+    # with FAMILYCAL_VISION_MODEL if a tougher photo ever needs a stronger model.
+    model = os.environ.get("FAMILYCAL_VISION_MODEL", "claude-haiku-4-5")
     with open(path, "rb") as fh:
         data = base64.standard_b64encode(fh.read()).decode("ascii")
     client = anthropic.Anthropic()      # reads ANTHROPIC_API_KEY from env
