@@ -148,14 +148,19 @@ def handle(transcript):
     return ask_claude(t)
 
 
+# what to say when the free-form brain isn't available — point at what works
+CAPABILITIES = ("I can add things to the grocery list, tell you the weather, or "
+                "say what's on today.")
+
+
 def ask_claude(transcript):
     """Optional: let Claude answer a free-form question with a little day context."""
     if not os.environ.get("ANTHROPIC_API_KEY", "").strip():
-        return "I'm not sure how to help with that."
+        return CAPABILITIES
     try:
         import anthropic
     except ImportError:
-        return "I'm not sure how to help with that."
+        return CAPABILITIES
     # compact context: today's agenda + the grocery list
     try:
         agenda = _speak_agenda("today")
@@ -175,9 +180,12 @@ def ask_claude(transcript):
             messages=[{"role": "user", "content": transcript}],
         )
         return next((b.text for b in resp.content if b.type == "text"),
-                    "I'm not sure how to help with that.").strip()
-    except Exception as e:                       # offline / API error → stay graceful
+                    CAPABILITIES).strip()
+    except Exception as e:                       # offline / API error / no credit
         log("claude fallback failed:", e)
+        # most common cause is an empty Claude balance — don't pretend it's broken
+        if "credit balance is too low" in str(e):
+            return CAPABILITIES
         return "I couldn't reach my brain just now."
 
 
