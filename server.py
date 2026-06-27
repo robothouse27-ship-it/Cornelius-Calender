@@ -845,26 +845,26 @@ def wx_icon(code, is_day):
     return name
 
 
+# Pinned location: Montgomery-Gibbs Executive Airport, Aero Drive, San Diego.
+# The wall is a fixed device, so a hard-pinned spot beats unreliable IP
+# geolocation (which tends to resolve to the ISP's city). Override with env.
+DEFAULT_LAT, DEFAULT_LON, DEFAULT_CITY = 32.8157, -117.1397, "San Diego"
+
 _geo = {"lat": None, "lon": None, "city": None}
 _weather_cache = {"at": 0.0, "data": None}
 
 
 def geolocate():
-    """lat/lon from env if set, else best-effort IP geolocation (cached)."""
+    """lat/lon from env if set, else the pinned San Diego default (cached)."""
     if _geo["lat"] is not None:
         return _geo
     lat = os.environ.get("FAMILYCAL_LAT")
     lon = os.environ.get("FAMILYCAL_LON")
     if lat and lon:
         _geo.update(lat=float(lat), lon=float(lon),
-                    city=os.environ.get("FAMILYCAL_CITY", ""))
-        return _geo
-    try:
-        r = requests.get("http://ip-api.com/json/?fields=lat,lon,city", timeout=6)
-        j = r.json()
-        _geo.update(lat=j["lat"], lon=j["lon"], city=j.get("city", ""))
-    except (requests.RequestException, KeyError, ValueError):
-        pass
+                    city=os.environ.get("FAMILYCAL_CITY", DEFAULT_CITY))
+    else:
+        _geo.update(lat=DEFAULT_LAT, lon=DEFAULT_LON, city=DEFAULT_CITY)
     return _geo
 
 
@@ -906,12 +906,25 @@ def weather():
         r = requests.get("https://api.open-meteo.com/v1/forecast", timeout=8, params={
             "latitude": g["lat"], "longitude": g["lon"],
             "current": "temperature_2m,weather_code,is_day",
-            "temperature_unit": "fahrenheit", "timezone": "auto"})
-        cur = r.json()["current"]
+            "daily": "weather_code,temperature_2m_max,temperature_2m_min",
+            "temperature_unit": "fahrenheit", "timezone": "auto",
+            "forecast_days": 5})
+        j = r.json()
+        cur = j["current"]
         emoji, label = WMO.get(cur["weather_code"], ("🌡️", ""))
+        daily = []
+        d = j.get("daily", {})
+        for i, date in enumerate(d.get("time", [])):
+            code = d["weather_code"][i]
+            de, dl = WMO.get(code, ("🌡️", ""))
+            daily.append({"date": date, "code": code, "emoji": de, "label": dl,
+                          "hi": round(d["temperature_2m_max"][i]),
+                          "lo": round(d["temperature_2m_min"][i]),
+                          "icon": wx_icon(code, 1)})
         data = {"ok": True, "temp": round(cur["temperature_2m"]),
                 "emoji": emoji, "label": label, "city": g.get("city", ""),
-                "icon": wx_icon(cur["weather_code"], cur.get("is_day", 1))}
+                "icon": wx_icon(cur["weather_code"], cur.get("is_day", 1)),
+                "daily": daily}
         _weather_cache.update(at=time.time(), data=data)
         return jsonify(data)
     except (requests.RequestException, KeyError, ValueError):

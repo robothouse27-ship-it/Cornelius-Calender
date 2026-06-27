@@ -298,8 +298,21 @@
   .sleep-hint{position:absolute;bottom:34px;left:0;right:0;text-align:center;color:#fff;opacity:.7;font-weight:700;z-index:2;}
 
   /* ===================== MODAL ===================== */
-  #modal,#settings,#qrmodal,#feedmodal,#chqrmodal{position:fixed;inset:0;background:rgba(58,51,87,.35);backdrop-filter:blur(4px);z-index:120;display:none;align-items:center;justify-content:center;padding:20px;}
-  #modal.on,#settings.on,#qrmodal.on,#feedmodal.on,#chqrmodal.on{display:flex;animation:fade .25s ease;}
+  #modal,#settings,#qrmodal,#feedmodal,#chqrmodal,#wxmodal{position:fixed;inset:0;background:rgba(58,51,87,.35);backdrop-filter:blur(4px);z-index:120;display:none;align-items:center;justify-content:center;padding:20px;}
+  #modal.on,#settings.on,#qrmodal.on,#feedmodal.on,#chqrmodal.on,#wxmodal.on{display:flex;animation:fade .25s ease;}
+  .chip.weather{cursor:pointer;}
+  .wx-today{display:flex;align-items:center;gap:14px;background:var(--grad-hero);color:#fff;border-radius:22px;padding:16px 18px;margin-bottom:16px;}
+  .wx-today img{height:54px;width:54px;object-fit:contain;flex:none;}
+  .wx-today .t-temp{font-family:"Fredoka";font-weight:600;font-size:34px;line-height:1;}
+  .wx-today .t-desc{font-weight:800;font-size:15px;opacity:.95;}
+  .wx-today .t-sub{font-weight:700;font-size:13px;opacity:.85;margin-top:2px;}
+  .wx-days{display:flex;gap:8px;}
+  .wx-day{flex:1;text-align:center;background:#FBFAFF;border:2px solid var(--line);border-radius:18px;padding:12px 4px;}
+  .wx-day.is-today{border-color:var(--lav);background:var(--lav-soft,#F2ECFF);}
+  .wx-day .d-name{font-weight:800;font-size:13px;color:var(--ink-soft);}
+  .wx-day img{height:34px;width:34px;object-fit:contain;margin:6px 0;}
+  .wx-day .d-hi{font-weight:800;font-size:15px;color:var(--ink);}
+  .wx-day .d-lo{font-weight:700;font-size:13px;color:var(--ink-soft);}
   .sheet.tall{max-height:88vh;overflow-y:auto;}
   .themes{display:flex;gap:10px;flex-wrap:wrap;}
   .theme-chip{width:58px;height:42px;border-radius:14px;cursor:pointer;border:4px solid transparent;box-shadow:var(--shadow-soft);transition:.12s;}
@@ -630,6 +643,23 @@
   </div>
 </div>
 
+<!-- 5-DAY FORECAST MODAL -->
+<div id="wxmodal">
+  <div class="sheet">
+    <h2 id="wxModalTitle">Weather ☀️</h2>
+    <div class="wx-today">
+      <img id="wxModalImg" alt="">
+      <div>
+        <div class="t-temp"><span id="wxModalTemp">—</span>°</div>
+        <div class="t-desc" id="wxModalDesc">—</div>
+        <div class="t-sub" id="wxModalSub"></div>
+      </div>
+    </div>
+    <div class="wx-days" id="wxDays"></div>
+    <div class="sheet-actions"><button class="btn primary" id="wxClose">Close</button></div>
+  </div>
+</div>
+
 <script>
 /* ============================================================
    STORAGE  — works as a downloaded file (persists) and degrades
@@ -763,16 +793,43 @@ async function loadEvents(){
   liveRefresh(); updateSync();
 }
 
+let wxData=null;   // last good weather payload, for the forecast panel
 async function loadWeather(){
   try{
     const r=await fetch('/api/weather?_='+Date.now(),{cache:'no-store'});
     const w=await r.json();
     if(!w.ok) return;
+    wxData=w;
     $("#wxImg").src='/icons/'+(w.icon||'ui_temp')+'.png';   // sticker, or thermometer fallback
     $("#wxTemp").textContent=w.temp+'°';
     $("#wxLabel").textContent=w.label;
+    if($("#wxmodal").classList.contains("on")) renderForecast();  // live-refresh if open
   }catch(e){/* leave whatever's showing */}
 }
+
+const WEEKDAYS=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+function renderForecast(){
+  if(!wxData) return;
+  $("#wxModalTitle").textContent='Weather in '+(wxData.city||'San Diego')+' '+(wxData.emoji||'☀️');
+  $("#wxModalImg").src='/icons/'+(wxData.icon||'ui_temp')+'.png';
+  $("#wxModalTemp").textContent=wxData.temp;
+  const days=wxData.daily||[];
+  const t=days[0];
+  $("#wxModalDesc").textContent='Right now: '+(wxData.label||'—');
+  $("#wxModalSub").textContent = t ? `Today ${wxData.label||t.label} · high ${t.hi}° / low ${t.lo}°` : '';
+  $("#wxDays").innerHTML = days.map((d,i)=>{
+    const dt=new Date(d.date+'T00:00');
+    const name = i===0 ? 'Today' : WEEKDAYS[dt.getDay()];
+    return `<div class="wx-day${i===0?' is-today':''}">
+      <div class="d-name">${name}</div>
+      <img src="/icons/${d.icon||'ui_temp'}.png" alt="">
+      <div class="d-hi">${d.hi}°</div>
+      <div class="d-lo">${d.lo}°</div>
+    </div>`;
+  }).join('');
+}
+function openForecast(){ if(!wxData) return; pop(); renderForecast(); $("#wxmodal").classList.add("on"); }
+function closeForecast(){ pop(); $("#wxmodal").classList.remove("on"); }
 
 function updateSync(){
   const el=$("#syncTag"); if(!el) return;
@@ -1816,6 +1873,9 @@ function closeFeed(){$("#feedmodal").classList.remove("on");}
 $("#sendPhones").addEventListener("click",()=>{pop();openFeedFlow();});
 $("#feedClose").addEventListener("click",()=>{pop();closeFeed();});
 $("#feedmodal").addEventListener("click",e=>{if(e.target.id==="feedmodal"){pop();closeFeed();}});
+$(".weather").addEventListener("click",openForecast);
+$("#wxClose").addEventListener("click",closeForecast);
+$("#wxmodal").addEventListener("click",e=>{if(e.target.id==="wxmodal")closeForecast();});
 $("#feedRotate").addEventListener("click",async()=>{
   pop();
   if(!confirm("Make a new link? Phones already subscribed will stop updating until they re-scan."))return;
