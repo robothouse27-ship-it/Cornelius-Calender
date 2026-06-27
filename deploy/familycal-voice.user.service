@@ -1,0 +1,20 @@
+# systemd *user* service (systemctl --user) — NOT a system unit.
+# Voice must run inside the desktop login session so it can reach the user's
+# PipeWire/PulseAudio: a system service only sees raw ALSA, which rejects the
+# 16 kHz capture rate and can't open the speaker ("Host is down"). Install to
+# ~/.config/systemd/user/ and enable with: systemctl --user enable --now
+# familycal-voice  (plus `loginctl enable-linger <user>` so it survives boots).
+[Unit]
+Description=Family Calendar local voice control (wake word + Whisper + Piper)
+After=default.target
+
+[Service]
+Type=simple
+WorkingDirectory=__APPDIR__
+ExecStart=__APPDIR__/.venv/bin/python __APPDIR__/voice.py
+Restart=always
+RestartSec=5
+Environment=FAMILYCAL_TZ=America/Los_Angeles
+
+[Install]
+WantedBy=default.target
