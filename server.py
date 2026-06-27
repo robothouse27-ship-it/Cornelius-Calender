@@ -16,6 +16,7 @@ import hmac
 import io
 import json
 import os
+import random
 import re
 import socket
 import subprocess
@@ -845,6 +846,77 @@ def wx_icon(code, is_day):
     return name
 
 
+# Funny one-liners keyed by the sticker-icon "bucket", picked at random so the
+# wall gets a fresh joke each refresh. Temperature extremes override below.
+WX_QUIPS = {
+    "wx_clear_day": [
+        "Suspiciously perfect. San Diego showing off again. ☀️",
+        "Blue skies, zero excuses to skip the beach. 🏖️",
+        "The sun called in for a full shift today.",
+        "Sunglasses weather. You know the drill.",
+    ],
+    "wx_clear_night": [
+        "Clear and starry — tuck the sun in, it earned it. 🌙",
+        "Crisp night skies. Wish upon something.",
+        "Not a cloud in sight. The moon's got the floor. ✨",
+    ],
+    "wx_partly": [
+        "A few clouds loitering, nothing to report.",
+        "Sun and clouds sharing custody of the sky.",
+        "Partly cloudy — the sky can't quite commit.",
+    ],
+    "wx_cloudy": [
+        "Gray ceiling installed. Mood: pensive.",
+        "The sun is working from home today.",
+        "Overcast — the sky forgot to pay its lighting bill.",
+    ],
+    "wx_fog": [
+        "Classic June gloom — the marine layer is hogging the sky. 🌫️",
+        "Foggy. Somewhere out there, the sun exists. Allegedly.",
+        "Marine layer special: low visibility, high cozy.",
+        "The sky pulled a gray blanket over its head again.",
+    ],
+    "wx_rain": [
+        "Rain in San Diego?! Quick, alert the neighbors. ☔",
+        "Liquid sunshine. Grab a jacket you forgot you owned.",
+        "It's wet out there — dramatic, by local standards.",
+        "Sky's leaking. Umbrella optional, complaining mandatory.",
+    ],
+    "wx_snow": [
+        "Snow. In San Diego. Check the calendar — and the apocalypse. ❄️",
+        "Frozen sky confetti. Highly unusual around here.",
+    ],
+    "wx_storm": [
+        "Thunder's putting on a show. Bring the pets in. ⛈️",
+        "Storm brewing — nature's drama queen is back.",
+        "Boom and flash incoming. Cozy up.",
+    ],
+}
+
+
+def wx_quip(code, temp, is_day):
+    """A playful one-liner for the current conditions (San Diego flavored)."""
+    if temp is not None:
+        if temp >= 95:
+            return random.choice([
+                "Absolutely roasting. Hydrate or evaporate. 🥵",
+                "It's a 'living in the fridge' kind of day.",
+                "Hot enough to fry an egg on the sidewalk. Don't.",
+            ])
+        if temp >= 88:
+            return random.choice([
+                "Toasty out — ice cream is now a food group. 🍦",
+                "Beach-and-A/C weather. Pick wisely.",
+            ])
+        if temp <= 40:
+            return random.choice([
+                "Brisk for San Diego — locals are basically in parkas. 🧥",
+                "Cold by our standards, which means: a light sweater.",
+            ])
+    icon = wx_icon(code, is_day)
+    return random.choice(WX_QUIPS.get(icon, ["Weather is happening. As it does."]))
+
+
 # Pinned location: Montgomery-Gibbs Executive Airport, Aero Drive, San Diego.
 # The wall is a fixed device, so a hard-pinned spot beats unreliable IP
 # geolocation (which tends to resolve to the ISP's city). Override with env.
@@ -921,9 +993,11 @@ def weather():
                           "hi": round(d["temperature_2m_max"][i]),
                           "lo": round(d["temperature_2m_min"][i]),
                           "icon": wx_icon(code, 1)})
-        data = {"ok": True, "temp": round(cur["temperature_2m"]),
+        ctemp = round(cur["temperature_2m"])
+        data = {"ok": True, "temp": ctemp,
                 "emoji": emoji, "label": label, "city": g.get("city", ""),
                 "icon": wx_icon(cur["weather_code"], cur.get("is_day", 1)),
+                "quip": wx_quip(cur["weather_code"], ctemp, cur.get("is_day", 1)),
                 "daily": daily}
         _weather_cache.update(at=time.time(), data=data)
         return jsonify(data)

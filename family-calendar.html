@@ -815,8 +815,8 @@ function renderForecast(){
   $("#wxModalTemp").textContent=wxData.temp;
   const days=wxData.daily||[];
   const t=days[0];
-  $("#wxModalDesc").textContent='Right now: '+(wxData.label||'—');
-  $("#wxModalSub").textContent = t ? `Today ${wxData.label||t.label} · high ${t.hi}° / low ${t.lo}°` : '';
+  $("#wxModalDesc").textContent = wxData.quip || ('Right now: '+(wxData.label||'—'));
+  $("#wxModalSub").textContent = t ? `${wxData.label||t.label} now · high ${t.hi}° / low ${t.lo}° today` : (wxData.label||'');
   $("#wxDays").innerHTML = days.map((d,i)=>{
     const dt=new Date(d.date+'T00:00');
     const name = i===0 ? 'Today' : WEEKDAYS[dt.getDay()];
