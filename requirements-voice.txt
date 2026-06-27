@@ -8,8 +8,13 @@
 # uses the ONNX inference path instead, which has wheels everywhere. These are
 # split out of the core requirements.txt so the grocery + photo features always
 # install cleanly even when the voice stack doesn't.
-onnxruntime>=1.17
-openwakeword<0.6
-faster-whisper>=1.0
-sounddevice>=0.4
-piper-tts>=1.2
+#
+# Hearing (Deepgram Nova) and the voice (Deepgram Aura) run in the cloud over
+# plain HTTPS — no SDK needed. faster-whisper + piper-tts below are now only the
+# *local fallbacks* used when DEEPGRAM_API_KEY is unset or a call fails.
+onnxruntime>=1.17       # wake word (always local)
+openwakeword<0.6        # wake word (always local)
+sounddevice>=0.4        # mic capture (always local)
+webrtcvad>=2.0          # end-of-speech detection (record until you stop talking)
+faster-whisper>=1.0     # local STT fallback (cloud is primary)
+piper-tts>=1.2          # local TTS fallback (cloud is primary)

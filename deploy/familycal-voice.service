@@ -1,5 +1,5 @@
 [Unit]
-Description=Family Calendar local voice control (wake word + Whisper + Piper)
+Description=Family Calendar voice control (local wake word + Deepgram STT/TTS + Claude)
 After=familycal-web.service sound.target
 Wants=familycal-web.service
 
@@ -11,10 +11,12 @@ ExecStart=__APPDIR__/.venv/bin/python __APPDIR__/voice.py
 Restart=always
 RestartSec=5
 Environment=FAMILYCAL_TZ=America/Los_Angeles
-# Voice listens on the box's mic and offloads free-form questions to Claude.
-# Add the API key here too so the Claude fallback works:
-#   Environment=ANTHROPIC_API_KEY=sk-ant-...
-# Tunables (optional): FAMILYCAL_WAKE_WORD, FAMILYCAL_WHISPER_MODEL, PIPER_VOICE.
+# Voice keeps the wake word local and offloads hearing/voice to Deepgram and
+# free-form answers to Claude. Add the keys here (or via `systemctl edit`):
+#   Environment=DEEPGRAM_API_KEY=...    (ears + voice; without it falls back to local)
+#   Environment=ANTHROPIC_API_KEY=sk-ant-...  (the brain; needs a FUNDED balance)
+# Tunables (optional): FAMILYCAL_WAKE_WORD, FAMILYCAL_WAKE_THRESHOLD,
+#   FAMILYCAL_DG_STT_MODEL, FAMILYCAL_DG_TTS_VOICE, FAMILYCAL_WHISPER_MODEL, PIPER_VOICE.
 
 [Install]
 WantedBy=multi-user.target

@@ -2,6 +2,20 @@
 
 **Purpose:** Add fully-local, open-source voice control to the family calendar app, running on the single Linux Mint box (no separate server). This is a companion to `calendar-import-architecture.md` and a build brief for Claude Code.
 
+> **⚠️ Status (superseded in part).** The fully-local design below was the original
+> aspiration, but the A9 CPU proved too weak for good local STT/TTS. The shipped
+> daemon (`voice.py`) now offloads the heavy stages to the cloud:
+> - **Wake word:** local openWakeWord (unchanged) — fires only on the configured
+>   word, with a threshold + 2-frame debounce to kill false triggers.
+> - **Recording:** records *until you stop talking* via `webrtcvad`, not a fixed window.
+> - **Hearing (STT):** **Deepgram Nova** (cloud). Local faster-whisper is the fallback.
+> - **Understanding:** **Claude Haiku** (cloud), not a local Ollama model.
+> - **Voice (TTS):** **Deepgram Aura** (cloud). Local Piper is the fallback.
+>
+> Keys (`DEEPGRAM_API_KEY`, `ANTHROPIC_API_KEY`) go in the systemd unit; without
+> them the daemon degrades to the local Whisper + Piper + rule-based path instead
+> of failing. The §-by-§ local plan below is retained for context/fallback design.
+
 ---
 
 ## 1. Environment & constraints
