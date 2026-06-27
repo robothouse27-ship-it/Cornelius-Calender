@@ -1048,47 +1048,79 @@ def render_grocery_page(token, ok):
 
 
 def render_grocery_list_page(items):
-    """A clean, printable copy of the current list — opened on a phone over WiFi
-    (scan the QR on the wall) and AirPrintable straight from the browser."""
+    """A clean, printable, phone-friendly copy of the list — scan the QR on the
+    wall to open it. Matches the wall's look (Fredoka/Nunito + candy palette);
+    the Copy / Share / Print buttons are screen-only and hidden when printed."""
     todo = [it for it in items if not it.get("done")]
     done = [it for it in items if it.get("done")]
+    today = datetime.now().strftime("%A, %B ") + str(datetime.now().day)
     if not items:
         rows = '<li class="empty">The list is empty right now.</li>'
     else:
         rows = "".join(
             f'<li>{html.escape(str(it.get("text", "")))}</li>' for it in todo)
-        if done:
-            rows += "".join(
-                f'<li class="got">{html.escape(str(it.get("text", "")))}</li>'
-                for it in done)
+        rows += "".join(
+            f'<li class="got">{html.escape(str(it.get("text", "")))}</li>'
+            for it in done)
     n = len(todo)
     sub = (f"{n} item{'s' if n != 1 else ''} to get"
            if n else "Everything's checked off 🎉")
+    # plain-text version powering Copy / Share (json-encoded → safe JS string)
+    lines = ["🛒 Grocery list"] + [f"• {it.get('text', '')}" for it in todo] + \
+            [f"✓ {it.get('text', '')}" for it in done]
+    list_text = json.dumps("\n".join(lines))
     return _page(f"""
-      <div class="big">🛒</div>
-      <h1>Grocery list</h1>
+      <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+      <div class="ghead"><span class="gemoji">🛒</span>
+        <div><h1>Grocery list</h1><div class="gdate">{today}</div></div></div>
       <p class="sub">{sub}</p>
       <ul class="glist">{rows}</ul>
-      <button onclick="window.print()">🖨️ Print this list</button>
-      <p class="hint">This is a snapshot from the wall. Re-scan the code on the
-      wall to get the latest list.</p>
+      <div class="grow">
+        <button class="gbtn" id="gcopy">📋 Copy text</button>
+        <button class="gbtn" id="gshare">📤 Share</button>
+        <button class="gbtn gprimary" onclick="window.print()">🖨️ Print</button>
+      </div>
+      <p class="hint">A snapshot from the wall — re-scan the code on the wall for
+      the latest list.</p>
+      <script>
+        const TEXT={list_text};
+        const flash=(b,t)=>{{const o=b.textContent;b.textContent=t;setTimeout(()=>b.textContent=o,1500);}};
+        async function copyText(){{
+          try{{ if(navigator.clipboard){{ await navigator.clipboard.writeText(TEXT); return true; }} }}catch(e){{}}
+          try{{ const ta=document.createElement('textarea'); ta.value=TEXT;
+            ta.style.cssText='position:fixed;opacity:0'; document.body.appendChild(ta);
+            ta.select(); const ok=document.execCommand('copy'); ta.remove(); return ok;
+          }}catch(e){{ return false; }}
+        }}
+        gcopy.onclick=async()=>flash(gcopy, (await copyText())?'✓ Copied!':'⚠️ couldn’t copy');
+        gshare.onclick=async()=>{{
+          if(navigator.share){{ try{{ await navigator.share({{title:'Grocery list',text:TEXT}}); }}catch(e){{}} }}
+          else{{ flash(gshare, (await copyText())?'✓ Copied!':'⚠️ no share'); }}
+        }};
+      </script>
       <style>
-        .glist{{list-style:none;padding:0;margin:6px 0 0}}
-        .glist li{{font-size:18px;font-weight:700;padding:13px 6px 13px 34px;
-          border-bottom:1px solid var(--line);position:relative}}
-        .glist li::before{{content:"";position:absolute;left:4px;top:50%;
-          width:18px;height:18px;margin-top:-9px;border:2px solid #C9BEEC;
-          border-radius:6px}}
+        .ghead{{display:flex;align-items:center;gap:12px;margin-bottom:2px}}
+        .gemoji{{font-size:42px;line-height:1;flex:none}}
+        .ghead h1{{font-family:"Fredoka",system-ui,sans-serif;font-weight:600;font-size:30px;margin:0;
+          background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}}
+        .gdate{{color:var(--soft);font-weight:700;font-size:13px;margin-top:2px}}
+        .glist{{list-style:none;padding:0;margin:12px 0 0}}
+        .glist li{{font-family:"Nunito",sans-serif;font-size:18px;font-weight:700;
+          padding:13px 6px 13px 36px;border-bottom:1px solid var(--line);position:relative}}
+        .glist li::before{{content:"";position:absolute;left:4px;top:50%;width:19px;height:19px;
+          margin-top:-10px;border:2px solid #C9BEEC;border-radius:6px}}
         .glist li.got{{color:var(--soft);text-decoration:line-through}}
-        .glist li.got::before{{content:"✓";color:#46D6B4;border-color:#46D6B4;
-          font-weight:900;font-size:13px;text-align:center;line-height:15px;
-          text-decoration:none}}
-        .glist li.empty{{color:var(--soft);padding-left:6px}}
-        .glist li.empty::before{{display:none}}
+        .glist li.got::before{{content:"✓";color:#46D6B4;border-color:#46D6B4;font-weight:900;
+          font-size:13px;text-align:center;line-height:16px;text-decoration:none}}
+        .glist li.empty{{color:var(--soft);padding-left:6px}} .glist li.empty::before{{display:none}}
+        .grow{{display:flex;gap:9px;margin-top:18px}}
+        .gbtn{{flex:1;width:auto;margin:0;border:0;border-radius:14px;padding:13px 6px;cursor:pointer;
+          font-family:"Nunito",sans-serif;font-weight:800;font-size:14px;color:var(--ink);background:#F1ECFF}}
+        .gbtn.gprimary{{color:#fff;background:var(--grad)}}
         @media print{{
-          body{{background:#fff;padding:0}}
-          .card{{box-shadow:none;margin:0;width:100%}}
-          button,.hint{{display:none}}
+          body{{background:#fff;padding:0}} .card{{box-shadow:none;margin:0;width:100%}}
+          .grow,.hint{{display:none}}
+          .ghead h1{{-webkit-text-fill-color:#5B4AA0;color:#5B4AA0}}
         }}
       </style>
     """, title="Grocery list")

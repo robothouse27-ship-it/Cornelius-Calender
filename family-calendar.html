@@ -565,10 +565,15 @@
     body *{visibility:hidden;}
     #printList,#printList *{visibility:visible;}
     #printList{display:block;position:absolute;inset:0;padding:30px;background:#fff;color:#000;}
-    #printList h2{font-family:"Fredoka";font-size:30px;margin:0 0 14px;}
-    #printList li{font-size:19px;font-weight:700;padding:11px 4px;border-bottom:1px solid #ddd;
-      list-style:none;}
+    #printList h2{font-family:"Fredoka";font-size:30px;margin:0 0 2px;color:#5B4AA0;}
+    #printList .pdate{font-family:"Nunito";font-weight:700;color:#8C84AB;font-size:14px;margin:0 0 16px;}
+    #printList li{font-family:"Nunito";font-size:19px;font-weight:700;padding:12px 4px 12px 34px;
+      border-bottom:1px solid #e3ddf0;list-style:none;position:relative;}
+    #printList li::before{content:"";position:absolute;left:2px;top:50%;width:19px;height:19px;
+      margin-top:-10px;border:2px solid #b9add9;border-radius:6px;}
     #printList li.got{text-decoration:line-through;color:#888;}
+    #printList li.got::before{content:"✓";color:#46D6B4;border-color:#46D6B4;font-weight:900;
+      font-size:13px;text-align:center;line-height:16px;text-decoration:none;}
     #printList ul{padding:0;margin:0;}
     #oskbd,#askbox{display:none!important;}
   }
@@ -2670,7 +2675,8 @@ function buildPrintList(){
   if(!p){ p=document.createElement("div"); p.id="printList"; document.body.appendChild(p); }
   const todo=grocery.filter(it=>!it.done), done=grocery.filter(it=>it.done);
   const li=arr=>arr.map(it=>`<li class="${it.done?'got':''}">${ffEsc(it.text)}</li>`).join("");
-  p.innerHTML=`<h2>🛒 Grocery list</h2><ul>${(li(todo)+li(done))||'<li>(empty)</li>'}</ul>`;
+  const d=new Date().toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'});
+  p.innerHTML=`<h2>🛒 Grocery list</h2><div class="pdate">${d}</div><ul>${(li(todo)+li(done))||'<li>(empty)</li>'}</ul>`;
 }
 async function openGroceryExport(){
   const b=_askEnsure();
@@ -2812,8 +2818,16 @@ function oskMove(k,left,top){
 function oskPlace(k){
   const pos=store.get('osk_pos',null);
   if(pos){ oskMove(k,pos.left,pos.top); }
-  else{ k.style.left="50%"; k.style.right="auto"; k.style.top="auto";
-        k.style.bottom="18px"; k.style.transform="translateX(-50%)"; }
+  else{
+    // Center with an explicit pixel left (not transform:translateX(-50%)): the
+    // pop-in animation animates `transform`, so a centering transform gets
+    // clobbered mid-animation and the keyboard jumps from right to center.
+    // Positioning via left keeps transform free for the bounce. Needs the
+    // keyboard displayed first so offsetWidth is real (oskShow adds .on first).
+    const w=k.offsetWidth||Math.min(680, innerWidth*0.96);
+    k.style.left=Math.max(4,(innerWidth-w)/2)+"px"; k.style.right="auto";
+    k.style.top="auto"; k.style.bottom="18px"; k.style.transform="none";
+  }
 }
 function oskDragSetup(k){
   const bar=k.querySelector(".osk-bar"); let dx=0,dy=0,drag=false;
@@ -2829,7 +2843,7 @@ function oskDragSetup(k){
 function oskShow(target){
   const k=oskBuild(); oskTarget=target;
   oskMode=(target.getAttribute && (target.getAttribute("type")||"").toLowerCase()==="number")?"num":"abc";
-  oskShift=false; oskRender(); oskPlace(k); k.classList.add("on");
+  oskShift=false; oskRender(); k.classList.add("on"); oskPlace(k);  // show, then measure+center
 }
 function oskHide(){ const k=$("#oskbd"); if(k) k.classList.remove("on"); oskTarget=null; }
 document.addEventListener("focusin",e=>{ if(oskTypeable(e.target)) oskShow(e.target); });
