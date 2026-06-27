@@ -218,18 +218,25 @@
 
   /* big live timer when Countdowns is the focused widget */
   #w-countdowns:not(.tile) .w-body{display:flex;flex-direction:column;overflow:hidden;}
-  .cd-hero{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:clamp(6px,1.6vh,16px);min-height:0;}
-  .cd-hero .cd-emoji-big{font-size:clamp(52px,9vw,120px);line-height:1;filter:drop-shadow(0 8px 16px rgba(94,72,150,.22));animation:cdfloat 3.2s ease-in-out infinite;}
-  .cd-hero .cd-name{font-family:"Fredoka";font-weight:600;font-size:clamp(22px,3.6vw,44px);color:var(--ink);}
-  .cd-clock{display:flex;gap:clamp(6px,1.4vw,18px);flex-wrap:wrap;justify-content:center;}
-  .cd-unit-box{background:var(--grad-hero);color:#fff;border-radius:clamp(14px,1.4vw,22px);padding:clamp(8px,1.5vh,20px) clamp(10px,1.5vw,24px);min-width:clamp(58px,8vw,128px);box-shadow:0 12px 28px rgba(94,72,150,.22);}
-  .cd-unit-box .n{font-family:"Fredoka";font-weight:700;font-size:clamp(30px,5.6vw,82px);line-height:1;font-variant-numeric:tabular-nums;}
-  .cd-unit-box .u{font-weight:800;font-size:clamp(10px,1vw,15px);text-transform:uppercase;letter-spacing:.08em;opacity:.92;margin-top:3px;}
+  /* a stack of live timer cards — every countdown gets its own */
+  .cd-stack{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(10px,2.4vh,30px);overflow-y:auto;width:100%;padding:6px 0;scrollbar-width:none;}
+  .cd-stack::-webkit-scrollbar{display:none;}
+  .cd-card{display:flex;flex-direction:column;align-items:center;text-align:center;gap:clamp(4px,1vh,12px);flex:none;}
+  .cd-card-head{display:flex;align-items:center;gap:10px;}
+  .cd-card-emoji{font-size:clamp(26px,3.4vw,46px);line-height:1;}
+  .cd-card-name{font-family:"Fredoka";font-weight:600;font-size:clamp(17px,2.2vw,28px);color:var(--ink);}
+  .cd-card.lead .cd-card-head{flex-direction:column;gap:6px;}
+  .cd-card.lead .cd-card-emoji{font-size:clamp(46px,8vw,104px);animation:cdfloat 3.2s ease-in-out infinite;filter:drop-shadow(0 8px 16px rgba(94,72,150,.22));}
+  .cd-card.lead .cd-card-name{font-size:clamp(22px,3.4vw,42px);}
+  .cd-clock{display:flex;gap:clamp(5px,1vw,14px);flex-wrap:wrap;justify-content:center;}
+  .cd-unit-box{background:var(--grad-hero);color:#fff;border-radius:14px;padding:6px 12px;min-width:clamp(46px,5vw,74px);box-shadow:0 8px 20px rgba(94,72,150,.2);}
+  .cd-unit-box .n{font-family:"Fredoka";font-weight:700;font-size:clamp(22px,3vw,40px);line-height:1;font-variant-numeric:tabular-nums;}
+  .cd-unit-box .u{font-weight:800;font-size:clamp(9px,.8vw,12px);text-transform:uppercase;letter-spacing:.07em;opacity:.92;margin-top:2px;}
+  .cd-card.lead .cd-unit-box{border-radius:clamp(14px,1.4vw,22px);padding:clamp(8px,1.5vh,20px) clamp(10px,1.5vw,24px);min-width:clamp(58px,8vw,128px);box-shadow:0 12px 28px rgba(94,72,150,.22);}
+  .cd-card.lead .cd-unit-box .n{font-size:clamp(30px,5.6vw,82px);}
+  .cd-card.lead .cd-unit-box .u{font-size:clamp(10px,1vw,15px);}
   .cd-unit-box.cd-s .n{animation:cdpulse 1s ease-in-out infinite;}
-  .cd-today{font-family:"Fredoka";font-weight:600;font-size:clamp(30px,6vw,72px);background:var(--grad-hero);-webkit-background-clip:text;background-clip:text;color:transparent;animation:cdpulse 1.2s ease-in-out infinite;}
-  .cd-more-list{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;flex:none;max-height:28%;overflow:auto;padding-top:6px;scrollbar-width:none;}
-  .cd-more-list::-webkit-scrollbar{display:none;}
-  .cd-chip{background:#FBFAFF;border-radius:12px;padding:6px 11px;font-weight:800;font-size:13px;color:var(--ink);}
+  .cd-today{font-family:"Fredoka";font-weight:600;font-size:clamp(22px,4vw,48px);background:var(--grad-hero);-webkit-background-clip:text;background-clip:text;color:transparent;animation:cdpulse 1.2s ease-in-out infinite;}
   @keyframes cdfloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
   .pill .who-next{margin-left:4px;font-weight:800;font-size:11.5px;color:#fff;background:var(--grad-hero);border-radius:9px;padding:2px 7px;}
   .pill .who-free{margin-left:4px;font-weight:800;font-size:11.5px;color:var(--ink-soft);}
@@ -858,7 +865,7 @@ function cdParts(target){
   const m=Math.floor(rem/60000); rem-=m*60000;
   return {d,h,m,s:Math.floor(rem/1000)};
 }
-let cdHeroTarget=null;   // live-ticking hero target (ms), or null
+let cdTickers=[];   // [{i, target}] — every live timer card gets ticked
 
 function renderCountdowns(){
   const wrap=$("#countdowns"); if(!wrap) return;
@@ -867,34 +874,27 @@ function renderCountdowns(){
     .filter(x=>x.days!==null && x.days>=0)        // hide past ones from the wall
     .sort((a,b)=>a.days-b.days);
   const focused = (typeof layout==="object" && layout.focus==="countdowns");
-  cdHeroTarget=null; wrap.innerHTML="";
+  cdTickers=[]; wrap.innerHTML="";
   if(!live.length){ wrap.innerHTML=`<div class="empty" style="padding:14px 6px">No countdowns yet — add one in ⚙️ Settings.</div>`; return; }
 
   if(focused){
-    // BIG live timer for the soonest one, the rest as small chips below
-    const hero=live[0].cd, target=cdTarget(hero), el=document.createElement("div");
-    el.className="cd-hero";
-    if(target-Date.now()<=0){
-      el.innerHTML=`<div class="cd-emoji-big">${hero.emoji}</div>
-        <div class="cd-name">${hero.label}</div><div class="cd-today">🎉 It's today! 🎉</div>`;
-    }else{
-      const units=[['d','days'],['h','hours'],['m','mins'],['s','secs']];
-      el.innerHTML=`<div class="cd-emoji-big">${hero.emoji}</div>
-        <div class="cd-name">${hero.label}</div>
-        <div class="cd-clock">${units.map(([k,u])=>
-          `<div class="cd-unit-box cd-${k}"><div class="n" id="cd-${k}">–</div><div class="u">${u}</div></div>`).join('')}</div>`;
-      cdHeroTarget=target;
-    }
-    wrap.appendChild(el);
-    if(live.length>1){
-      const more=document.createElement("div"); more.className="cd-more-list";
-      live.slice(1).forEach(({cd,days})=>{
-        const c=document.createElement("div"); c.className="cd-chip";
-        c.innerHTML=`${cd.emoji} ${cd.label} · <b>${days===0?'today':days+'d'}</b>`;
-        more.appendChild(c);
-      });
-      wrap.appendChild(more);
-    }
+    // every countdown gets its OWN live timer — soonest is the lead (biggest)
+    const stack=document.createElement("div"); stack.className="cd-stack";
+    live.forEach(({cd},i)=>{
+      const target=cdTarget(cd), card=document.createElement("div");
+      card.className="cd-card"+(i===0?" lead":"");
+      if(target-Date.now()<=0){
+        card.innerHTML=`<div class="cd-card-head"><span class="cd-card-emoji">${cd.emoji}</span><span class="cd-card-name">${cd.label}</span></div><div class="cd-today">🎉 today!</div>`;
+      }else{
+        const units=[['d','days'],['h','hrs'],['m','min'],['s','sec']];
+        card.innerHTML=`<div class="cd-card-head"><span class="cd-card-emoji">${cd.emoji}</span><span class="cd-card-name">${cd.label}</span></div>
+          <div class="cd-clock">${units.map(([k,u])=>
+            `<div class="cd-unit-box cd-${k}"><div class="n" id="cd${i}-${k}">–</div><div class="u">${u}</div></div>`).join('')}</div>`;
+        cdTickers.push({i,target});
+      }
+      stack.appendChild(card);
+    });
+    wrap.appendChild(stack);
     tickCountdown();   // fill the numbers right away
     return;
   }
@@ -912,14 +912,19 @@ function renderCountdowns(){
   });
 }
 
-/* called every second: update the big timer digits while it's focused */
+/* called every second: update every focused timer card's digits */
 function tickCountdown(){
-  if(cdHeroTarget===null) return;
+  if(!cdTickers.length) return;
   if(!(typeof layout==="object" && layout.focus==="countdowns")) return;
-  const {d,h,m,s}=cdParts(cdHeroTarget), g=id=>document.getElementById(id);
-  if(g('cd-d')) g('cd-d').textContent=d;
-  [['cd-h',h],['cd-m',m],['cd-s',s]].forEach(([id,v])=>{ if(g(id)) g(id).textContent=String(v).padStart(2,'0'); });
-  if(cdHeroTarget-Date.now()<=0){ cdHeroTarget=null; confettiBurst(); renderCountdowns(); }
+  const g=id=>document.getElementById(id);
+  let hitZero=false;
+  cdTickers.forEach(({i,target})=>{
+    const {d,h,m,s}=cdParts(target);
+    if(g(`cd${i}-d`)) g(`cd${i}-d`).textContent=d;
+    [['h',h],['m',m],['s',s]].forEach(([k,v])=>{ const e=g(`cd${i}-${k}`); if(e) e.textContent=String(v).padStart(2,'0'); });
+    if(target-Date.now()<=0) hitZero=true;
+  });
+  if(hitZero){ confettiBurst(); renderCountdowns(); }   // one just arrived → re-render
 }
 
 /* ============================================================
