@@ -11,8 +11,6 @@ anthropic>=0.40
 Pillow>=10
 pytesseract>=0.3
 
-# Local voice control (Stage C) — CPU-only, tiny models on the wall's 2 cores.
-faster-whisper>=1.0
-openwakeword>=0.6
-sounddevice>=0.4
-piper-tts>=1.2
+# Local voice control (Stage C) lives in requirements-voice.txt — it pulls
+# heavy, CPU-architecture-specific wheels (tflite-runtime via openwakeword)
+# that don't install on every box, so it's opt-in and kept out of the core set.

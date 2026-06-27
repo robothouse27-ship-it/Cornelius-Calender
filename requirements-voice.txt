@@ -1,0 +1,11 @@
+# Local voice control (Stage C of docs-grocery-voice-plan.md) — OPTIONAL.
+# Install only on a box with a working mic + audio libs:
+#     sudo apt install -y libportaudio2
+#     .venv/bin/pip install -r requirements-voice.txt
+# openwakeword pulls tflite-runtime, which has no wheel for some Python/CPU
+# combos — that's why these are split out of the core requirements.txt so the
+# grocery + photo features always install cleanly.
+faster-whisper>=1.0
+openwakeword>=0.6
+sounddevice>=0.4
+piper-tts>=1.2
