@@ -1770,6 +1770,104 @@ def weather():
         return jsonify({"ok": False})
 
 
+# --------------------------------------------------------------------------- #
+# "On this day" — a fun history quip from Wikipedia's free On-This-Day feed
+# (no API key). Cached once per day. We drop grim events (deaths, war, disasters)
+# so it stays kid-friendly on the wall and bias toward the quirky/interesting.
+# Each event already carries a one-line blurb + a Wikipedia link + a thumbnail;
+# tapping the wall card shows the blurb + a QR to open the page on a phone.
+# --------------------------------------------------------------------------- #
+# whole-word match (so "war" doesn't trip on "warm"/"reward"), plus a couple of
+# compounds the boundaries miss. Best-effort kid-safety, not a guarantee.
+_OTD_GRIM = re.compile(
+    r"\b(?:war|warfare|battle|battles|fire|wildfire|gunfire|dead|deadly|die|dies|"
+    r"died|death|deaths|kill|kills|killed|killing|fatal|fatally|murder|murders|"
+    r"murdered|wound|wounded|attack|attacks|attacked|bomb|bombs|bombed|bombing|"
+    r"shoot|shooting|shootings|shot|gun|guns|gunman|weapon|weapons|terror|"
+    r"terrorist|terrorism|massacre|massacres|massacred|genocide|assassinate|"
+    r"assassinated|assassination|slaughter|execution|executed|nazi|holocaust|"
+    r"hanged|hanging|riot|riots|crash|crashed|crashes|disaster|earthquake|"
+    r"tsunami|hurricane|tornado|famine|plague|epidemic|pandemic|invasion|"
+    r"invaded|siege|casualty|casualties|explosion|explosions|exploded|sank|sunk|"
+    r"drowned|drowns|rape|raped|slavery|slave|slaves|violence|violent|coup|"
+    r"ebola|outbreak|mutiny|rebellion|uprising|battleship|warship|warplane)\b"
+    r"|cyberattack|cyber attack",
+    re.I)
+_otd_cache = {"day": "", "data": None}
+
+
+def _otd_pick(events):
+    """Keep kid-friendly events that have a Wikipedia link; skip grim ones."""
+    out = []
+    for e in events:
+        text = str(e.get("text", "")).strip()
+        if not text or _OTD_GRIM.search(text):
+            continue
+        pages = e.get("pages") or []
+        if not pages:
+            continue
+        p = pages[0]
+        urls = p.get("content_urls") or {}
+        url = ((urls.get("desktop") or {}).get("page")
+               or (urls.get("mobile") or {}).get("page") or "")
+        if not url:
+            continue
+        out.append({
+            "year": e.get("year"),
+            "text": text,
+            "url": url,
+            "title": p.get("normalizedtitle") or p.get("titles", {}).get("normalized")
+                     or p.get("title", ""),
+            "thumb": (p.get("thumbnail") or {}).get("source", ""),
+            "extract": str(p.get("extract", "")).strip(),
+        })
+    return out
+
+
+def _otd_fetch(kind, mm, dd):
+    r = requests.get(
+        f"https://en.wikipedia.org/api/rest_v1/feed/onthisday/{kind}/{mm}/{dd}",
+        timeout=8, headers={"accept": "application/json",
+                            "User-Agent": "CorneliusFamilyCalendar/1.0 (family wall)"})
+    return _otd_pick((r.json() or {}).get(kind, []))
+
+
+@app.route("/api/onthisday-qr")
+def onthisday_qr():
+    """QR for a Wikipedia link so you can open the full story on your phone."""
+    url = request.args.get("url", "")
+    if not re.match(r"^https?://[a-z]+\.(m\.)?wikipedia\.org/", url):
+        abort(404)
+    img = qrcode.make(url)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return send_file(buf, mimetype="image/png")
+
+
+@app.route("/api/onthisday")
+def onthisday():
+    today = datetime.now().strftime("%m/%d")
+    if _otd_cache["data"] and _otd_cache["day"] == today:
+        return jsonify(_otd_cache["data"])
+    mm, dd = today.split("/")
+    try:
+        events = _otd_fetch("selected", mm, dd)        # curated, higher quality
+        if len(events) < 6:                            # top up from the full feed
+            seen = {e["url"] for e in events}
+            events += [e for e in _otd_fetch("events", mm, dd) if e["url"] not in seen]
+        random.shuffle(events)
+        data = {"ok": bool(events),
+                "date": datetime.now().strftime("%B ") + str(datetime.now().day),
+                "events": events[:10]}
+        _otd_cache.update(day=today, data=data)
+        return jsonify(data)
+    except (requests.RequestException, ValueError, KeyError):
+        if _otd_cache["data"]:
+            return jsonify(_otd_cache["data"])         # stale-but-good
+        return jsonify({"ok": False, "events": []})
+
+
 if __name__ == "__main__":
     print(f"Family Calendar on http://{lan_ip()}:{PORT}  (and http://localhost:{PORT})")
     app.run(host="0.0.0.0", port=PORT, threaded=True)

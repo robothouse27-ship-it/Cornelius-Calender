@@ -295,6 +295,20 @@
   .gchip-lbl{font-weight:800;font-size:12px;color:var(--ink-soft);margin:0 4px 6px;
     display:flex;align-items:center;gap:5px;}
   .rail .widget.tile .gchips,.rail .widget.tile .gchip-lbl{display:none;}
+  /* "On this day" — a rotating history quip; tap for a blurb + phone QR */
+  .otd{cursor:pointer;}
+  .otd-year{font-family:"Fredoka";font-weight:700;font-size:30px;line-height:1;
+    background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+  .otd-text{font-weight:700;font-size:16px;line-height:1.4;color:var(--ink);margin-top:8px;}
+  .otd-more{font-weight:800;font-size:12.5px;color:var(--lav);margin-top:10px;}
+  #w-onthisday.tile .otd-year{font-size:22px;} #w-onthisday.tile .otd-text{font-size:14px;}
+  .otd-empty{color:var(--ink-soft);font-weight:700;padding:10px 4px;}
+  .otd-modal-img{width:100%;max-height:200px;object-fit:cover;border-radius:14px;margin-bottom:12px;}
+  .otd-modal-year{font-family:"Fredoka";font-weight:700;color:var(--lav);font-size:15px;}
+  .otd-modal-extract{font-weight:600;color:var(--ink-soft);font-size:14px;line-height:1.5;margin:8px 0 14px;}
+  .otd-qr-wrap{display:flex;gap:14px;align-items:center;background:var(--lav-soft);border-radius:16px;padding:14px;}
+  .otd-qr-wrap img{width:120px;height:120px;border-radius:12px;background:#fff;flex:none;}
+  .otd-qr-wrap .otd-qr-hint{font-weight:800;font-size:13.5px;color:var(--ink);}
 
   /* First Five — kids' morning routine */
   #w-firstfive .w-body{padding-top:4px;}
@@ -409,8 +423,8 @@
   .sleep-hint{position:absolute;bottom:34px;left:0;right:0;text-align:center;color:#fff;opacity:.7;font-weight:700;z-index:2;}
 
   /* ===================== MODAL ===================== */
-  #modal,#settings,#qrmodal,#feedmodal,#chqrmodal,#grqrmodal,#groceryReview,#wxmodal{position:fixed;inset:0;background:rgba(58,51,87,.35);backdrop-filter:blur(4px);z-index:120;display:none;align-items:center;justify-content:center;padding:20px;}
-  #modal.on,#settings.on,#qrmodal.on,#feedmodal.on,#chqrmodal.on,#grqrmodal.on,#groceryReview.on,#wxmodal.on{display:flex;animation:fade .25s ease;}
+  #modal,#settings,#qrmodal,#feedmodal,#chqrmodal,#grqrmodal,#groceryReview,#wxmodal,#otdmodal{position:fixed;inset:0;background:rgba(58,51,87,.35);backdrop-filter:blur(4px);z-index:120;display:none;align-items:center;justify-content:center;padding:20px;}
+  #modal.on,#settings.on,#qrmodal.on,#feedmodal.on,#chqrmodal.on,#grqrmodal.on,#groceryReview.on,#wxmodal.on,#otdmodal.on{display:flex;animation:fade .25s ease;}
   .chip.weather{cursor:pointer;}
   .wx-today{display:flex;align-items:center;gap:14px;background:var(--grad-hero);color:#fff;border-radius:22px;padding:16px 18px;margin-bottom:16px;}
   .wx-today img{height:54px;width:54px;object-fit:contain;flex:none;}
@@ -693,6 +707,11 @@
       <span class="w-title"><img class="hicon" src="/icons/ui_sunrise.png" alt="">First Five</span></header>
     <div class="w-body"><div id="firstfive"></div></div>
   </section>
+  <section class="widget card" id="w-onthisday" data-w="onthisday">
+    <header class="w-head"><span class="w-grip" aria-hidden="true">⠿</span>
+      <span class="w-title"><span class="hemoji">📜</span>On this day</span></header>
+    <div class="w-body"><div id="onthisday"></div></div>
+  </section>
 </div>
 
 <button class="fab" id="fab">+</button>
@@ -915,6 +934,21 @@
     </div>
     <div class="wx-days" id="wxDays"></div>
     <div class="sheet-actions"><button class="btn primary" id="wxClose">Close</button></div>
+  </div>
+</div>
+
+<!-- ON THIS DAY — full blurb + a QR to open the Wikipedia page on a phone -->
+<div id="otdmodal">
+  <div class="sheet">
+    <h2>On this day 📜</h2>
+    <img id="otdImg" class="otd-modal-img" alt="" style="display:none">
+    <div class="otd-modal-year" id="otdYear"></div>
+    <div class="otd-modal-extract" id="otdExtract"></div>
+    <div class="otd-qr-wrap">
+      <img id="otdQr" alt="QR to the Wikipedia page">
+      <div class="otd-qr-hint">📱 Scan to read the whole story on your phone.</div>
+    </div>
+    <div class="sheet-actions"><button class="btn primary" id="otdClose">Close</button></div>
   </div>
 </div>
 
@@ -1281,7 +1315,7 @@ function evChip(e){ // compact chip (month/week)
    DASHBOARD  — one big focus widget + a rail of tappable, draggable
    tiles. State {focus, order} persists so it survives a reboot.
    ============================================================ */
-const WIDGETS=['calendar','today','chores','grocery','countdowns','firstfive'];
+const WIDGETS=['calendar','today','chores','grocery','countdowns','firstfive','onthisday'];
 let layout=store.get('layout',{focus:'calendar',order:['firstfive','today','chores','family','countdowns']});
 function saveLayout(){ store.set('layout',layout); }
 function widgetEl(w){ return document.getElementById('w-'+w); }
@@ -2704,6 +2738,48 @@ function checkReminders(){
 }
 
 /* ============================================================
+   ON THIS DAY — a rotating "weird thing that happened today in
+   history" quip from Wikipedia (server caches it daily + filters
+   out grim events). Tap the card → blurb + a QR to read it on a phone.
+   ============================================================ */
+let otdEvents=[], otdIdx=0, otdRotate=null;
+async function loadOnThisDay(){
+  try{
+    const r=await fetch('/api/onthisday?_='+Date.now(),{cache:'no-store'});
+    const j=await r.json();
+    otdEvents=(j&&j.events)||[]; otdIdx=0;
+  }catch(e){/* offline → keep what we had */}
+}
+function renderOnThisDay(){
+  const c=$("#onthisday"); if(!c) return;
+  if(!otdEvents.length){
+    c.innerHTML=`<div class="otd-empty">No tidbit today — check back tomorrow.</div>`;
+    return;
+  }
+  const e=otdEvents[otdIdx%otdEvents.length];
+  const card=document.createElement("div"); card.className="otd";
+  card.innerHTML=`<div class="otd-year"></div><div class="otd-text"></div>
+    <div class="otd-more">Tap to read more →</div>`;
+  card.querySelector(".otd-year").textContent=e.year;
+  card.querySelector(".otd-text").textContent=e.text;
+  card.addEventListener("click",ev=>{ev.stopPropagation();openOtd(e);});
+  c.innerHTML=""; c.appendChild(card);
+}
+function otdNext(){ if(otdEvents.length){ otdIdx=(otdIdx+1)%otdEvents.length; renderOnThisDay(); } }
+function openOtd(e){
+  pop();
+  $("#otdYear").textContent=e.year + (e.title?` · ${e.title}`:"");
+  $("#otdExtract").textContent=e.extract || e.text;
+  const img=$("#otdImg");
+  if(e.thumb){ img.src=e.thumb; img.style.display=""; } else { img.style.display="none"; }
+  $("#otdQr").src='/api/onthisday-qr?url='+encodeURIComponent(e.url);
+  $("#otdmodal").classList.add("on");
+}
+function closeOtd(){ $("#otdmodal").classList.remove("on"); }
+$("#otdClose").addEventListener("click",()=>{pop();closeOtd();});
+$("#otdmodal").addEventListener("click",e=>{ if(e.target.id==="otdmodal"){pop();closeOtd();} });
+
+/* ============================================================
    GO
    ============================================================ */
 applyTheme(themeKey);
@@ -2733,6 +2809,12 @@ setInterval(pollGroceryReview, 2500);
 
 loadWeather();
 setInterval(loadWeather, 15*60*1000); // refresh weather every 15 min
+
+/* on-this-day: load today's quips, rotate through them, refresh once an hour
+   (the server only re-fetches Wikipedia when the date rolls over) */
+loadOnThisDay().then(renderOnThisDay);
+otdRotate=setInterval(otdNext, 20*1000);            // next quip every 20s
+setInterval(()=>{ loadOnThisDay().then(renderOnThisDay); }, 60*60*1000);
 
 checkReminders();
 setInterval(()=>{ checkReminders(); renderAgenda(); }, 30*1000); // nudge + live countdown
