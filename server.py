@@ -40,6 +40,7 @@ EXPORT_PATH = DATA / "export.json"   # persistent secret token for the family fe
 CHORES_PATH = DATA / "chores.json"   # box-side chore chart (rotates daily on the wall)
 SHOPPING_PATH = DATA / "shopping.json"  # shared family grocery list (done = server-side)
 STAPLES_PATH = DATA / "staples.json"  # "usuals": one-tap re-add of common items
+CHORE_IDEAS_PATH = DATA / "chore_ideas.json"  # one-tap common chores ("quick add")
 UPLOADS_DIR = HERE / "uploads"       # phone-snapped list photos, pending review (gitignored)
 PHOTOS_DIR = HERE / "photos"        # drop family photos here for sleep mode
 ICONS_DIR = HERE / "icons"          # pastel sticker icons (weather/chores/events)
@@ -125,6 +126,29 @@ def new_chore(label, existing):
     return {"id": "c_" + uuid.uuid4().hex[:6],
             "label": str(label).strip()[:40],
             "seed": len(existing)}
+
+
+# --- "quick add" common chores: one-tap chips on the wall (like grocery usuals) #
+DEFAULT_CHORE_IDEAS = ["Take out trash", "Make bed", "Do dishes", "Walk the dog 🐶",
+                       "Vacuum", "Laundry", "Set the table", "Feed pets 🐾"]
+
+
+def load_chore_ideas():
+    if CHORE_IDEAS_PATH.exists():
+        try:
+            doc = json.loads(CHORE_IDEAS_PATH.read_text())
+            items = [str(x).strip()[:40] for x in doc.get("items", []) if str(x).strip()]
+            return {"items": items}
+        except (ValueError, OSError):
+            pass
+    return {"items": list(DEFAULT_CHORE_IDEAS)}
+
+
+def save_chore_ideas(doc):
+    fd, tmp = tempfile.mkstemp(dir=str(DATA), suffix=".tmp")
+    with os.fdopen(fd, "w") as fh:
+        json.dump(doc, fh, indent=2)
+    os.replace(tmp, CHORE_IDEAS_PATH)
 
 
 # --- shared grocery list (one family list; "done" is a server-side boolean so
@@ -616,6 +640,46 @@ def chores_add():
     doc.setdefault("chores", []).append(chore)
     save_chores(doc)
     return jsonify({"ok": True, "chore": chore})
+
+
+@app.route("/api/chores/add-many", methods=["POST"])
+def chores_add_many():
+    """Bulk add from pasted text (or an explicit list), one chore per line."""
+    body = request.get_json(force=True, silent=True) or {}
+    if isinstance(body.get("items"), list):
+        labels = [str(x) for x in body["items"]]
+    else:
+        labels = structure_items(body.get("text", ""))
+    doc = load_chores()
+    added = []
+    for label in labels:
+        label = str(label).strip()
+        if not label:
+            continue
+        chore = new_chore(label, doc.get("chores", []))
+        doc.setdefault("chores", []).append(chore)
+        added.append(chore)
+    save_chores(doc)
+    return jsonify({"ok": True, "added": added, "count": len(added)})
+
+
+@app.route("/api/chore-ideas")
+def chore_ideas_list():
+    return jsonify(load_chore_ideas())
+
+
+@app.route("/api/chore-ideas/set", methods=["POST"])
+def chore_ideas_set():
+    """Replace the whole quick-add set (the Settings editor saves the full list)."""
+    body = request.get_json(force=True, silent=True) or {}
+    items, seen = [], set()
+    for x in body.get("items", []):
+        t = str(x).strip()[:40]
+        if t and t.lower() not in seen:
+            seen.add(t.lower())
+            items.append(t)
+    save_chore_ideas({"items": items})
+    return jsonify({"ok": True, "items": items})
 
 
 @app.route("/api/chores/update", methods=["POST"])
@@ -1117,8 +1181,29 @@ def chore_submit():
     token = request.form.get("token", "")
     if token != chore_window["token"] or not chore_window_open():
         return Response(render_result_page(False, "This add window has closed. "
-                        "Tap “Add chore by phone” on the wall again."),
+                        "Tap “Add from phone” on the wall again."),
                         mimetype="text/html", status=403)
+
+    # Pasted/typed multi-line text adds several chores at once.
+    pasted = (request.form.get("list_text", "") or "").strip()
+    if pasted:
+        doc = load_chores()
+        added = []
+        for lbl in structure_items(pasted):
+            chore = new_chore(lbl, doc.get("chores", []))
+            doc.setdefault("chores", []).append(chore)
+            added.append(chore)
+        save_chores(doc)
+        chore_window["added"] = {"label": f"{len(added)} chores"}
+        chore_window["expires_at"] = 0
+        if added:
+            return Response(render_result_page(
+                True, f"Added {len(added)} chore{'s' if len(added) != 1 else ''} "
+                "to the chart. They'll show on the wall in a few seconds."),
+                mimetype="text/html")
+        return Response(render_result_page(False, "Couldn't find any chores in that "
+                        "text — try again."), mimetype="text/html", status=400)
+
     label = request.form.get("label", "").strip()
     if not label:
         return Response(render_result_page(False, "Please type a chore name."),
@@ -1206,17 +1291,34 @@ def render_chore_page(token, ok):
                      title="Add a chore")
     return _page(f"""
       <h1>Add a chore 🧹</h1>
-      <p class="sub">Type a chore for the family chart. It rotates through everyone,
+      <p class="sub">Add chores for the family chart. It rotates through everyone,
       a new person each day.</p>
       <form method="POST" action="/chore">
         <input type="hidden" name="token" value="{token}">
         <label>Chore</label>
         <input type="text" name="label" placeholder="Take out the trash" maxlength="40"
-               required autocapitalize="sentences">
+               autocapitalize="sentences">
         <button type="submit">Add to the chart</button>
       </form>
-      <p class="hint">Tip: end it with an emoji and it becomes a sticker on the
+
+      <div class="orline"><span>or</span></div>
+
+      <form method="POST" action="/chore">
+        <input type="hidden" name="token" value="{token}">
+        <label>Add several</label>
+        <textarea name="list_text" rows="6" placeholder="One chore per line, e.g.&#10;Take out trash&#10;Make beds&#10;Walk the dog"></textarea>
+        <button type="submit">Add these to the chart</button>
+      </form>
+
+      <p class="hint">Tip: end a chore with an emoji and it becomes a sticker on the
       wall — e.g. “Water plants 🌱”.</p>
+      <style>
+        .orline{{display:flex;align-items:center;gap:10px;color:var(--soft);
+          font-weight:800;font-size:13px;margin:18px 0}}
+        .orline::before,.orline::after{{content:"";flex:1;height:1px;background:var(--line)}}
+        textarea{{width:100%;box-sizing:border-box;border:1.5px solid var(--line);
+          border-radius:14px;padding:12px;font:inherit;font-weight:600;resize:vertical}}
+      </style>
     """, title="Add a chore")
 
 

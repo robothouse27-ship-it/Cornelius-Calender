@@ -801,12 +801,20 @@
         </section>
         <section class="set-panel" data-panel="chores">
           <h3>Chores</h3>
-          <p class="set-hint">A shared checklist. Add from here or from a phone.</p>
+          <p class="set-hint">A shared checklist. Add here or from a phone; chores rotate through everyone, a new person each day.</p>
           <div id="choreEditor"></div>
           <div class="set-actions">
             <button class="btn" id="addChore">🧹 Add a chore</button>
-            <button class="btn primary" id="addChorePhone">📲 Add by phone</button>
+            <button class="btn primary" id="addChorePhone">📲 Add from phone</button>
           </div>
+          <h3 style="margin-top:22px">Paste chores 📋</h3>
+          <p class="set-hint">Paste or type chores (one per line). Bullets and numbers get cleaned up automatically.</p>
+          <textarea id="chorePaste" rows="4" placeholder="Take out trash&#10;Make beds&#10;Walk the dog" style="width:100%;box-sizing:border-box;border:1.5px solid var(--line);border-radius:14px;padding:11px;font:inherit;font-weight:600;resize:vertical"></textarea>
+          <div class="set-actions"><button class="btn primary" id="chorePasteAdd">＋ Add these</button></div>
+          <h3 style="margin-top:22px">Quick add ✨</h3>
+          <p class="set-hint">Common chores that show as one-tap chips on the wall. One per line.</p>
+          <textarea id="choreIdeasEditor" rows="5" placeholder="Take out trash&#10;Make bed&#10;Do dishes" style="width:100%;box-sizing:border-box;border:1.5px solid var(--line);border-radius:14px;padding:11px;font:inherit;font-weight:600;resize:vertical"></textarea>
+          <div class="set-actions"><button class="btn primary" id="choreIdeasSave">💾 Save quick-add</button></div>
         </section>
         <section class="set-panel" data-panel="groceries">
           <h3>Groceries</h3>
@@ -871,9 +879,9 @@
 <!-- QR ADD-CHORE MODAL -->
 <div id="chqrmodal">
   <div class="sheet">
-    <h2>Add a chore 📲</h2>
+    <h2>Add from phone 📲</h2>
     <p style="color:var(--ink-soft);font-weight:700;margin:-6px 0 16px;font-size:14px">
-      Scan with your phone, then type a chore for the chart.</p>
+      Scan with your phone, then type a chore — or paste several at once.</p>
     <div style="text-align:center">
       <img id="chqrImg" alt="QR code" width="240" height="240"
            style="border-radius:18px;background:#fff;box-shadow:var(--shadow-soft)">
@@ -1185,6 +1193,7 @@ async function syncNow(){
    across every device and can be added from a phone. "Done" stays box-local
    and per-day: a {choreId → 'YYYY-MM-DD'} map that auto-resets at midnight. */
 let chores = [];                              // {id,label,seed} from /api/chores
+let choreIdeas = [];                          // ["Take out trash",...] quick-add set
 let choreDone = store.get('choreDone', {});
 function saveChoreDone(){ store.set('choreDone', choreDone); }
 async function loadChores(){
@@ -1193,6 +1202,13 @@ async function loadChores(){
     const j=await r.json();
     chores=(j.chores||[]).map((c,i)=>({id:c.id,label:c.label,
       seed:(typeof c.seed==='number'?c.seed:i)}));
+  }catch(e){/* offline → keep whatever we had */}
+}
+async function loadChoreIdeas(){
+  try{
+    const r=await fetch('/api/chore-ideas?_='+Date.now(),{cache:'no-store'});
+    const j=await r.json();
+    choreIdeas=(j.items||[]).filter(Boolean);
   }catch(e){/* offline → keep whatever we had */}
 }
 
@@ -1599,7 +1615,35 @@ function renderAgenda(){
 
 function renderChores(){
   const c=$("#chores"); c.innerHTML="";
-  if(!chores.length){c.innerHTML=`<div class="empty" style="padding:14px 6px">No chores yet — add some in ⚙️ Settings.</div>`;return;}
+  // header actions: type-to-add + add-from-phone, right on the card (like groceries)
+  const bar=document.createElement("div"); bar.className="grocery-bar";
+  bar.innerHTML=`<button class="gro-btn" id="chrAdd">＋ Add chore</button>
+    <button class="gro-btn" id="chrPhone">📲 Add from phone</button>`;
+  c.appendChild(bar);
+  bar.querySelector("#chrAdd").addEventListener("click",e=>{e.stopPropagation();addChore();});
+  bar.querySelector("#chrPhone").addEventListener("click",e=>{e.stopPropagation();openChoreQr();});
+
+  // quick-add chips for common chores — tap to drop one on the chart
+  if(choreIdeas.length){
+    const onChart=new Set(chores.map(ch=>ch.label.toLowerCase()));
+    const lbl=document.createElement("div"); lbl.className="gchip-lbl"; lbl.textContent="✨ Quick add";
+    const chips=document.createElement("div"); chips.className="gchips";
+    choreIdeas.forEach(name=>{
+      const on=onChart.has(name.toLowerCase());
+      const b=document.createElement("button");
+      b.className="gchip"+(on?" on":""); b.textContent=(on?"✓ ":"")+name;
+      b.addEventListener("click",e=>{e.stopPropagation();quickAddChore(name);});
+      chips.appendChild(b);
+    });
+    c.appendChild(lbl); c.appendChild(chips);
+  }
+
+  if(!chores.length){
+    const empty=document.createElement("div");
+    empty.className="empty"; empty.style.cssText="padding:14px 6px";
+    empty.textContent="No chores yet — add one above, tap a quick-add, or use your phone.";
+    c.appendChild(empty); return;
+  }
   // Plain checklist — not assigned to anyone for now. (Per-person rotation
   // grouping still lives in choreAssignee/chorePool for when owners are set up.)
   chores.forEach(ch=>{
@@ -2294,19 +2338,52 @@ function postJSON(url,body){
   return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify(body)}).catch(()=>{});
 }
-async function addChore(){
-  const label=(await askText({title:"New chore 🧹",placeholder:"e.g. Take out the trash"})||"").trim();
-  if(!label) return;
+async function choreAddLabel(label){
+  label=String(label||"").trim(); if(!label) return;
   try{
     const r=await fetch('/api/chores/add',{method:'POST',
       headers:{'Content-Type':'application/json'},body:JSON.stringify({label})});
     const j=await r.json();
     if(j.ok){ chores.push({id:j.chore.id,label:j.chore.label,seed:j.chore.seed});
-      renderChoreEditor(); renderChores(); pop(true); }
+      renderChoreEditor(); renderChores(); }
   }catch(e){/* offline */}
+}
+async function addChore(){
+  const label=(await askText({title:"New chore 🧹",placeholder:"e.g. Take out the trash"})||"").trim();
+  if(!label) return;
+  await choreAddLabel(label); pop(true);
+}
+async function quickAddChore(name){ await choreAddLabel(name); pop(true); }
+async function choreAddMany(text){
+  text=String(text||"").trim(); if(!text) return 0;
+  try{
+    const r=await fetch('/api/chores/add-many',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+    const j=await r.json();
+    await loadChores(); renderChoreEditor(); renderChores();
+    return (j&&j.count)||0;
+  }catch(e){ return 0; }
+}
+function renderChoreIdeasEditor(){
+  const ta=$("#choreIdeasEditor"); if(ta) ta.value=(choreIdeas||[]).join("\n");
 }
 $("#addChore").addEventListener("click",()=>{pop();addChore();});
 $("#addChorePhone").addEventListener("click",()=>{pop();openChoreQr();});
+$("#chorePasteAdd").addEventListener("click",async()=>{
+  pop();
+  const ta=$("#chorePaste"); const n=await choreAddMany(ta.value);
+  ta.value=""; if(n) pop(true);
+});
+$("#choreIdeasSave").addEventListener("click",async()=>{
+  pop();
+  const lines=$("#choreIdeasEditor").value.split("\n").map(s=>s.trim()).filter(Boolean);
+  try{
+    const r=await fetch('/api/chore-ideas/set',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({items:lines})});
+    const j=await r.json(); choreIdeas=(j&&j.items)||lines;
+  }catch(e){ choreIdeas=lines; }
+  renderChoreIdeasEditor(); renderChores(); pop(true);
+});
 
 /* Countdown editor: emoji + label + a real date picker, inline. */
 function renderCountdownEditor(){
@@ -2380,7 +2457,7 @@ function setTab(name){
   document.querySelectorAll('.set-panel').forEach(p=>p.classList.toggle('active',p.dataset.panel===name));
 }
 $("#setNav").addEventListener("click",e=>{ const t=e.target.closest('.set-tab'); if(t){ pop(); setTab(t.dataset.tab); } });
-$("#settingsBtn").addEventListener("click",()=>{pop();$("#settings").classList.add("on");setTab('appearance');renderThemePicker();renderCountdownEditor();renderFirstFiveEditor();loadChores().then(()=>{renderChoreEditor();renderChores();});loadShopping().then(()=>{renderGroceryEditor();renderGrocery();});loadStaples().then(()=>{renderStaplesEditor();renderGrocery();});loadFeeds().then(()=>{renderPeopleEditor();renderFeedEditor();});});
+$("#settingsBtn").addEventListener("click",()=>{pop();$("#settings").classList.add("on");setTab('appearance');renderThemePicker();renderCountdownEditor();renderFirstFiveEditor();loadChores().then(()=>{renderChoreEditor();renderChores();});loadChoreIdeas().then(()=>{renderChoreIdeasEditor();renderChores();});loadShopping().then(()=>{renderGroceryEditor();renderGrocery();});loadStaples().then(()=>{renderStaplesEditor();renderGrocery();});loadFeeds().then(()=>{renderPeopleEditor();renderFeedEditor();});});
 $("#sDone").addEventListener("click",()=>{pop();closeEmojiPicker();$("#settings").classList.remove("on");});
 $("#settings").addEventListener("click",e=>{if(e.target.id==="settings"){pop();closeEmojiPicker();$("#settings").classList.remove("on");}});
 
@@ -2824,6 +2901,7 @@ setInterval(loadEvents, 3*60*1000);   // re-fetch events.json every 3 min
 setInterval(updateSync, 30*1000);     // keep the "N min ago" label honest
 
 /* load the chore chart from the box, then keep it fresh (phone adds show up) */
+loadChoreIdeas().then(renderChores);
 loadChores().then(renderChores);
 setInterval(()=>{ loadChores().then(renderChores); }, 3*60*1000);
 

@@ -15,6 +15,7 @@ import server
 def client(tmp_path, monkeypatch):
     monkeypatch.setattr(server, "DATA", tmp_path)
     monkeypatch.setattr(server, "CHORES_PATH", tmp_path / "chores.json")
+    monkeypatch.setattr(server, "CHORE_IDEAS_PATH", tmp_path / "chore_ideas.json")
     # fresh, closed window per test (module global otherwise leaks between tests)
     monkeypatch.setattr(server, "chore_window",
                         {"token": None, "expires_at": 0.0, "added": None})
@@ -121,3 +122,30 @@ def test_phone_submit_requires_label(client):
     w = _open_window(client)
     r = client.post("/chore", data={"token": w["token"], "label": "   "})
     assert r.status_code == 400
+
+
+# --------------------------------------------------------------------------- #
+# bulk paste + quick-add ("ideas") — parity with the grocery list
+# --------------------------------------------------------------------------- #
+def test_add_many_from_pasted_text(client, tmp_path):
+    r = client.post("/api/chores/add-many",
+                    json={"text": "- Mow lawn\n2. Clean garage\nTake out recycling"})
+    assert r.get_json()["count"] == 3
+    labels = [c["label"] for c in _chores(tmp_path)]
+    assert "Mow lawn" in labels and "Clean garage" in labels
+
+
+def test_chore_ideas_defaults_and_set(client):
+    assert "Make bed" in client.get("/api/chore-ideas").get_json()["items"]
+    r = client.post("/api/chore-ideas/set", json={"items": ["Dishes", "dishes", " Sweep "]})
+    assert r.get_json()["items"] == ["Dishes", "Sweep"]          # de-duped + trimmed
+    assert client.get("/api/chore-ideas").get_json()["items"] == ["Dishes", "Sweep"]
+
+
+def test_phone_submit_pasted_list_adds_many(client, tmp_path):
+    w = _open_window(client)
+    r = client.post("/chore", data={"token": w["token"],
+                                    "list_text": "Wash car\nRake leaves"})
+    assert r.status_code == 200 and "Added 2 chores" in r.get_data(as_text=True)
+    labels = [c["label"] for c in _chores(tmp_path)]
+    assert "Wash car" in labels and "Rake leaves" in labels
