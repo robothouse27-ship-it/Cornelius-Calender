@@ -295,14 +295,37 @@
   .gchip-lbl{font-weight:800;font-size:12px;color:var(--ink-soft);margin:0 4px 6px;
     display:flex;align-items:center;gap:5px;}
   .rail .widget.tile .gchips,.rail .widget.tile .gchip-lbl{display:none;}
-  /* "On this day" — a rotating history quip; tap for a blurb + phone QR */
-  .otd{cursor:pointer;}
-  .otd-year{font-family:"Fredoka";font-weight:700;font-size:30px;line-height:1;
-    background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
-  .otd-text{font-weight:700;font-size:16px;line-height:1.4;color:var(--ink);margin-top:8px;}
-  .otd-more{font-weight:800;font-size:12.5px;color:var(--lav);margin-top:10px;}
-  #w-onthisday.tile .otd-year{font-size:22px;} #w-onthisday.tile .otd-text{font-size:14px;}
-  .otd-empty{color:var(--ink-soft);font-weight:700;padding:10px 4px;}
+  /* "On this day" — a rotating history quip; tap for a blurb + phone QR.
+     Matches the calendar's candy look: soft tinted card, Fredoka gradient
+     numerals, a pastel date pill + a rounded "read more" pill. */
+  #w-onthisday .w-body{display:flex;}
+  .otd{cursor:pointer;flex:1;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;gap:10px;width:100%;
+    background:linear-gradient(160deg,#FBF6FF,#FFF4FA);border:1.5px solid var(--line);
+    border-radius:22px;padding:clamp(14px,2.6vh,26px) 16px;animation:otdIn .45s ease;}
+  .otd:active{transform:scale(.99);}
+  .otd-pill{display:inline-flex;align-items:center;gap:6px;background:var(--lav-soft);
+    color:var(--lav);font-family:"Nunito";font-weight:800;font-size:12px;letter-spacing:.04em;
+    text-transform:uppercase;padding:5px 12px;border-radius:999px;}
+  .otd-year{font-family:"Fredoka";font-weight:700;font-size:clamp(34px,5vw,52px);line-height:1;
+    background:var(--grad-hero);-webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;}
+  .otd-text{font-family:"Nunito";font-weight:700;font-size:clamp(15px,1.7vw,18px);
+    line-height:1.45;color:var(--ink);max-width:34ch;}
+  .otd-more{display:inline-flex;align-items:center;gap:6px;background:#fff;
+    color:var(--lav);font-family:"Nunito";font-weight:800;font-size:12.5px;
+    padding:7px 14px;border-radius:999px;box-shadow:var(--shadow-soft);margin-top:2px;}
+  .otd-dots{display:flex;gap:5px;margin-top:2px;}
+  .otd-dots i{width:6px;height:6px;border-radius:50%;background:#E3D9FA;transition:.2s;}
+  .otd-dots i.on{background:var(--lav);width:16px;border-radius:3px;}
+  /* compact in the rail: smaller numerals, hide the dots/pill chrome */
+  #w-onthisday.tile .otd{gap:7px;padding:14px 12px;border-radius:18px;}
+  #w-onthisday.tile .otd-year{font-size:28px;}
+  #w-onthisday.tile .otd-text{font-size:14px;-webkit-line-clamp:4;display:-webkit-box;
+    -webkit-box-orient:vertical;overflow:hidden;}
+  #w-onthisday.tile .otd-dots{display:none;}
+  @keyframes otdIn{from{opacity:0;transform:translateY(8px) scale(.98);}to{opacity:1;transform:none;}}
+  .otd-empty{color:var(--ink-soft);font-weight:700;padding:10px 4px;text-align:center;}
   .otd-modal-img{width:100%;max-height:200px;object-fit:cover;border-radius:14px;margin-bottom:12px;}
   .otd-modal-year{font-family:"Fredoka";font-weight:700;color:var(--lav);font-size:15px;}
   .otd-modal-extract{font-weight:600;color:var(--ink-soft);font-size:14px;line-height:1.5;margin:8px 0 14px;}
@@ -2742,24 +2765,29 @@ function checkReminders(){
    history" quip from Wikipedia (server caches it daily + filters
    out grim events). Tap the card → blurb + a QR to read it on a phone.
    ============================================================ */
-let otdEvents=[], otdIdx=0, otdRotate=null;
+let otdEvents=[], otdIdx=0, otdRotate=null, otdDate="";
 async function loadOnThisDay(){
   try{
     const r=await fetch('/api/onthisday?_='+Date.now(),{cache:'no-store'});
     const j=await r.json();
-    otdEvents=(j&&j.events)||[]; otdIdx=0;
+    otdEvents=(j&&j.events)||[]; otdDate=(j&&j.date)||""; otdIdx=0;
   }catch(e){/* offline → keep what we had */}
 }
 function renderOnThisDay(){
   const c=$("#onthisday"); if(!c) return;
   if(!otdEvents.length){
-    c.innerHTML=`<div class="otd-empty">No tidbit today — check back tomorrow.</div>`;
+    c.innerHTML=`<div class="otd-empty">No tidbit today — check back tomorrow ✨</div>`;
     return;
   }
   const e=otdEvents[otdIdx%otdEvents.length];
+  const n=Math.min(otdEvents.length,6);
+  const dots=Array.from({length:n},(_,i)=>
+    `<i class="${i===(otdIdx%otdEvents.length)%n?'on':''}"></i>`).join("");
   const card=document.createElement("div"); card.className="otd";
-  card.innerHTML=`<div class="otd-year"></div><div class="otd-text"></div>
-    <div class="otd-more">Tap to read more →</div>`;
+  card.innerHTML=`<span class="otd-pill">📜 ${otdDate}</span>
+    <div class="otd-year"></div><div class="otd-text"></div>
+    <span class="otd-more">✨ Tap to read more</span>
+    <div class="otd-dots">${dots}</div>`;
   card.querySelector(".otd-year").textContent=e.year;
   card.querySelector(".otd-text").textContent=e.text;
   card.addEventListener("click",ev=>{ev.stopPropagation();openOtd(e);});
@@ -2813,7 +2841,7 @@ setInterval(loadWeather, 15*60*1000); // refresh weather every 15 min
 /* on-this-day: load today's quips, rotate through them, refresh once an hour
    (the server only re-fetches Wikipedia when the date rolls over) */
 loadOnThisDay().then(renderOnThisDay);
-otdRotate=setInterval(otdNext, 20*1000);            // next quip every 20s
+otdRotate=setInterval(otdNext, 3*60*1000);          // next quip every 3 min
 setInterval(()=>{ loadOnThisDay().then(renderOnThisDay); }, 60*60*1000);
 
 checkReminders();
