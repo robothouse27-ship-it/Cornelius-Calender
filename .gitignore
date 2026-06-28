@@ -25,4 +25,5 @@ uploads/*
 data/shopping.json
 data/staples.json
 data/chore_ideas.json
+data/birthdays.json
 voices/

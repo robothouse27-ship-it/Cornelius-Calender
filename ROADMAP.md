@@ -113,3 +113,24 @@ Three things quietly gate everything downstream:
 **Recommended start:** knock out Phase 0 (mostly verification + one security
 task), then do Phase 1 + 2 as a single "foundation" push — the unglamorous work
 that makes the next stretch of features fast instead of painful.
+
+## Fun / family ideas (brainstorm, 2026-06)
+
+Captured from a "what else could we add?" chat. Not sequenced — pick by mood.
+
+- [x] **Birthdays + confetti** — shared birthday list; the wall pops a 🎂 banner
+      and confetti on the morning of one (age shown if the year is set). *Shipped.*
+- [x] **On this day** — rotating "this day in history" quip from Wikipedia, tap
+      for a blurb + a QR to the page. *Shipped.*
+- [ ] **Meal planner → groceries** — a 7-day dinner strip; tap a meal to push its
+      ingredients onto the (now sectioned) grocery list. Highest-value next feature.
+- [ ] **Reward points / allowance** — chores + First Five earn points → a visible
+      jar/goal ("$5 = movie night"). The #1 thing comparable family apps add.
+- [ ] **Streaks / trophies** — gamify First Five ("all five, all week").
+- [ ] **"On this day" photo** — surface a family photo from the same date last
+      year into sleep mode.
+- [ ] **Daily delight** — a rotating dad-joke / fact / riddle line for the kids.
+- [ ] **Reminders / "don't forget"** — lightweight nudge list (library books,
+      trash night), separate from chores.
+
+Comparables worth cribbing from: Skylight Calendar, Hearth Display, Cozi.

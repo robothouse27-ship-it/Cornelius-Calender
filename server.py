@@ -41,6 +41,7 @@ CHORES_PATH = DATA / "chores.json"   # box-side chore chart (rotates daily on th
 SHOPPING_PATH = DATA / "shopping.json"  # shared family grocery list (done = server-side)
 STAPLES_PATH = DATA / "staples.json"  # "usuals": one-tap re-add of common items
 CHORE_IDEAS_PATH = DATA / "chore_ideas.json"  # one-tap common chores ("quick add")
+BIRTHDAYS_PATH = DATA / "birthdays.json"  # family birthdays → wall banner + confetti
 UPLOADS_DIR = HERE / "uploads"       # phone-snapped list photos, pending review (gitignored)
 PHOTOS_DIR = HERE / "photos"        # drop family photos here for sleep mode
 ICONS_DIR = HERE / "icons"          # pastel sticker icons (weather/chores/events)
@@ -301,6 +302,40 @@ def save_staples(doc):
     with os.fdopen(fd, "w") as fh:
         json.dump(doc, fh, indent=2)
     os.replace(tmp, STAPLES_PATH)
+
+
+# --- family birthdays (shared) → the wall shows a banner + confetti on the day #
+def load_birthdays():
+    if BIRTHDAYS_PATH.exists():
+        try:
+            doc = json.loads(BIRTHDAYS_PATH.read_text())
+            return {"items": [b for b in doc.get("items", []) if b.get("name")]}
+        except (ValueError, OSError):
+            pass
+    return {"items": []}
+
+
+def save_birthdays(doc):
+    fd, tmp = tempfile.mkstemp(dir=str(DATA), suffix=".tmp")
+    with os.fdopen(fd, "w") as fh:
+        json.dump(doc, fh, indent=2)
+    os.replace(tmp, BIRTHDAYS_PATH)
+
+
+def _clamp_int(v, lo, hi, default=None):
+    try:
+        n = int(v)
+    except (TypeError, ValueError):
+        return default
+    return max(lo, min(hi, n))
+
+
+def new_birthday(name, month, day, year=None):
+    return {"id": "b_" + uuid.uuid4().hex[:6],
+            "name": str(name).strip()[:30],
+            "month": _clamp_int(month, 1, 12),
+            "day": _clamp_int(day, 1, 31),
+            "year": _clamp_int(year, 1900, 2200)}    # optional → None for "age unknown"
 
 
 # --------------------------------------------------------------------------- #
@@ -680,6 +715,60 @@ def chore_ideas_set():
             items.append(t)
     save_chore_ideas({"items": items})
     return jsonify({"ok": True, "items": items})
+
+
+# --------------------------------------------------------------------------- #
+# family birthdays — the wall pops a 🎂 banner + confetti on the morning of one
+# --------------------------------------------------------------------------- #
+@app.route("/api/birthdays")
+def birthdays_list():
+    return jsonify(load_birthdays())
+
+
+@app.route("/api/birthdays/add", methods=["POST"])
+def birthdays_add():
+    body = request.get_json(force=True, silent=True) or {}
+    name = str(body.get("name", "")).strip()
+    bday = new_birthday(name, body.get("month"), body.get("day"), body.get("year"))
+    if not bday["name"] or bday["month"] is None or bday["day"] is None:
+        return jsonify({"ok": False, "error": "name, month and day required"}), 400
+    doc = load_birthdays()
+    doc.setdefault("items", []).append(bday)
+    save_birthdays(doc)
+    return jsonify({"ok": True, "item": bday})
+
+
+@app.route("/api/birthdays/update", methods=["POST"])
+def birthdays_update():
+    body = request.get_json(force=True, silent=True) or {}
+    bid = body.get("id")
+    doc = load_birthdays()
+    for b in doc.get("items", []):
+        if b.get("id") == bid:
+            if "name" in body:
+                b["name"] = str(body["name"]).strip()[:30] or b["name"]
+            if "month" in body:
+                b["month"] = _clamp_int(body["month"], 1, 12, b.get("month"))
+            if "day" in body:
+                b["day"] = _clamp_int(body["day"], 1, 31, b.get("day"))
+            if "year" in body:
+                b["year"] = _clamp_int(body["year"], 1900, 2200)
+            save_birthdays(doc)
+            return jsonify({"ok": True, "item": b})
+    return jsonify({"ok": False, "error": "not found"}), 404
+
+
+@app.route("/api/birthdays/delete", methods=["POST"])
+def birthdays_delete():
+    body = request.get_json(force=True, silent=True) or {}
+    bid = body.get("id")
+    doc = load_birthdays()
+    before = len(doc.get("items", []))
+    doc["items"] = [b for b in doc.get("items", []) if b.get("id") != bid]
+    if len(doc["items"]) == before:
+        return jsonify({"ok": False, "error": "not found"}), 404
+    save_birthdays(doc)
+    return jsonify({"ok": True})
 
 
 @app.route("/api/chores/update", methods=["POST"])

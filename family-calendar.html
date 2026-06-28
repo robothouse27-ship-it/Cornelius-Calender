@@ -326,6 +326,18 @@
   #w-onthisday.tile .otd-dots{display:none;}
   @keyframes otdIn{from{opacity:0;transform:translateY(8px) scale(.98);}to{opacity:1;transform:none;}}
   .otd-empty{color:var(--ink-soft);font-weight:700;padding:10px 4px;text-align:center;}
+  /* birthday banner — only shows on the day; candy gradient + a little bounce */
+  .bday-banner{display:flex;align-items:center;justify-content:center;gap:14px;
+    margin:0 0 14px;padding:14px 22px;border-radius:22px;color:#fff;
+    background:var(--grad-hero);box-shadow:var(--shadow-soft);animation:bdayPop .5s ease;}
+  .bday-banner .bday-cake{font-size:clamp(28px,3.4vw,42px);line-height:1;animation:bdayWiggle 2.4s ease-in-out infinite;}
+  .bday-banner .bday-text{font-family:"Fredoka";font-weight:700;font-size:clamp(18px,2.4vw,30px);
+    text-shadow:0 2px 6px rgba(120,80,160,.25);}
+  .bday-banner .bday-x{margin-left:6px;border:0;background:rgba(255,255,255,.28);color:#fff;
+    width:30px;height:30px;border-radius:50%;font-size:16px;font-weight:900;cursor:pointer;flex:none;}
+  .bday-banner .bday-x:hover{background:rgba(255,255,255,.42);}
+  @keyframes bdayPop{from{opacity:0;transform:translateY(-8px) scale(.96);}to{opacity:1;transform:none;}}
+  @keyframes bdayWiggle{0%,100%{transform:rotate(-8deg);}50%{transform:rotate(8deg);}}
   .otd-modal-img{width:100%;max-height:200px;object-fit:cover;border-radius:14px;margin-bottom:12px;}
   .otd-modal-year{font-family:"Fredoka";font-weight:700;color:var(--lav);font-size:15px;}
   .otd-modal-extract{font-weight:600;color:var(--ink-soft);font-size:14px;line-height:1.5;margin:8px 0 14px;}
@@ -683,6 +695,9 @@
     <button class="icon-btn" id="sleepBtn" title="Sleep"><img class="btnIcon" src="/icons/ui_moon.png" alt="Sleep"></button>
   </div>
 
+  <!-- BIRTHDAY BANNER — appears only on someone's birthday (with confetti) -->
+  <div id="bdayBanner" class="bday-banner" hidden></div>
+
   <!-- MAIN — a dashboard: one big "focus" widget + a rail of small tiles.
        Tap a tile to promote it; press-drag a tile to reorder. JS distributes
        the widgets (below) into #focus / #rail and remembers your choice. -->
@@ -784,6 +799,7 @@
         <button class="set-tab" data-tab="chores"><span>🧹</span> Chores</button>
         <button class="set-tab" data-tab="groceries"><span>🛒</span> Groceries</button>
         <button class="set-tab" data-tab="countdowns"><span>⏳</span> Countdowns</button>
+        <button class="set-tab" data-tab="birthdays"><span>🎂</span> Birthdays</button>
         <button class="set-tab" data-tab="firstfive"><span>🌅</span> First Five</button>
         <button class="set-tab" data-tab="calendars"><span>📅</span> Calendars</button>
       </nav>
@@ -839,6 +855,12 @@
           <p class="set-hint">Count down to trips, birthdays &amp; holidays.</p>
           <div id="cdEditor"></div>
           <button class="btn" id="addCountdown">⏳ Add a countdown</button>
+        </section>
+        <section class="set-panel" data-panel="birthdays">
+          <h3>Birthdays</h3>
+          <p class="set-hint">On someone's birthday the wall pops a 🎂 banner and confetti. Year is optional — add it to show their age.</p>
+          <div id="bdayEditor"></div>
+          <button class="btn" id="addBirthday">🎂 Add a birthday</button>
         </section>
         <section class="set-panel" data-panel="firstfive">
           <h3>First Five</h3>
@@ -1994,7 +2016,7 @@ function scheduleMidnightRollover(){
   if(ffMidnightTimer) clearTimeout(ffMidnightTimer);
   const now=new Date();
   const next=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1,0,0,3,0);
-  ffMidnightTimer=setTimeout(()=>{ ffPruneStale(); renderFirstFive(); scheduleMidnightRollover(); }, Math.max(1000,next-now));
+  ffMidnightTimer=setTimeout(()=>{ ffPruneStale(); renderFirstFive(); renderBirthdayBanner(); scheduleMidnightRollover(); }, Math.max(1000,next-now));
 }
 
 /* ============================================================
@@ -2417,6 +2439,108 @@ function addCountdown(){
 }
 $("#addCountdown").addEventListener("click",()=>{pop();addCountdown();});
 
+/* ============================================================
+   BIRTHDAYS — shared family birthdays (data/birthdays.json). The
+   wall pops a 🎂 banner + confetti on the morning of one. Year is
+   optional; when set we show the age they're turning.
+   ============================================================ */
+let birthdays = [];   // {id,name,month,day,year} from /api/birthdays
+const MONTHS=["January","February","March","April","May","June","July","August",
+              "September","October","November","December"];
+async function loadBirthdays(){
+  try{
+    const r=await fetch('/api/birthdays?_='+Date.now(),{cache:'no-store'});
+    const j=await r.json();
+    birthdays=(j.items||[]).map(b=>({id:b.id,name:b.name,
+      month:b.month,day:b.day,year:b.year||null}));
+  }catch(e){/* offline → keep what we had */}
+}
+function renderBirthdayEditor(){
+  const wrap=$("#bdayEditor"); if(!wrap) return; wrap.innerHTML="";
+  if(!birthdays.length){
+    wrap.innerHTML=`<div class="empty" style="padding:8px 4px">No birthdays yet — add the family's so the wall can celebrate them.</div>`;
+    return;
+  }
+  birthdays.forEach((b,i)=>{
+    const row=document.createElement("div");row.className="fam-edit";
+    const opts=MONTHS.map((m,mi)=>`<option value="${mi+1}"${b.month===mi+1?' selected':''}>${m}</option>`).join("");
+    row.innerHTML=`<input type="text" value="${(b.name||'').replace(/"/g,'&quot;')}" maxlength="30" placeholder="Name" style="flex:1">
+      <select class="bday-mon" title="Month" style="flex:none">${opts}</select>
+      <input type="number" class="bday-day" value="${b.day||''}" min="1" max="31" title="Day" style="width:62px">
+      <input type="number" class="bday-yr" value="${b.year||''}" min="1900" max="2200" placeholder="year" title="Year (optional)" style="width:78px">
+      <button class="del" title="Remove"><img class="ctrlIcon" src="/icons/ui_delete.png" alt="Remove"></button>`;
+    const name=row.querySelector('input[type=text]');
+    const mon=row.querySelector('.bday-mon');
+    const day=row.querySelector('.bday-day');
+    const yr=row.querySelector('.bday-yr');
+    const del=row.querySelector('.del');
+    const save=()=>{ renderBirthdayBanner();
+      postJSON('/api/birthdays/update',{id:b.id,name:b.name,month:b.month,day:b.day,year:b.year}); };
+    name.addEventListener("change",()=>{ b.name=name.value.trim()||b.name; save(); });
+    mon.addEventListener("change",()=>{ b.month=parseInt(mon.value)||b.month; save(); });
+    day.addEventListener("change",()=>{ b.day=Math.max(1,Math.min(31,parseInt(day.value)||b.day)); save(); });
+    yr.addEventListener("change",()=>{ b.year=yr.value?Math.max(1900,Math.min(2200,parseInt(yr.value))):null; save(); });
+    del.addEventListener("click",()=>{ pop(); birthdays.splice(i,1); renderBirthdayEditor(); renderBirthdayBanner();
+      postJSON('/api/birthdays/delete',{id:b.id}); });
+    wrap.appendChild(row);
+  });
+}
+async function addBirthday(){
+  try{
+    const r=await fetch('/api/birthdays/add',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name:"Name",month:M+1,day:D})});
+    const j=await r.json();
+    if(j.ok){ birthdays.push({id:j.item.id,name:j.item.name,month:j.item.month,day:j.item.day,year:j.item.year||null});
+      renderBirthdayEditor(); pop(true); }
+  }catch(e){/* offline */}
+}
+$("#addBirthday").addEventListener("click",()=>{pop();addBirthday();});
+
+// compute the date fresh (page-load Y/M/D go stale on a wall left running overnight)
+function todayParts(){
+  const t=new Date();
+  return {y:t.getFullYear(), mo:t.getMonth()+1, d:t.getDate(),
+    key:`${t.getFullYear()}-${pad(t.getMonth()+1)}-${pad(t.getDate())}`};
+}
+function todaysBirthdays(){
+  const {mo,d}=todayParts();
+  return birthdays.filter(b=>b.month===mo && b.day===d && b.name);
+}
+function renderBirthdayBanner(){
+  const el=$("#bdayBanner"); if(!el) return;
+  const list=todaysBirthdays(); const {y,key}=todayParts();
+  if(!list.length){ el.hidden=true; el.innerHTML=""; return; }
+  const names=list.map(b=>{
+    const age=b.year?(y-b.year):null;
+    return age!=null ? `${b.name} (${age}!)` : b.name;
+  });
+  const who = names.length===1 ? names[0]
+    : names.slice(0,-1).join(", ")+" & "+names[names.length-1];
+  el.innerHTML=`<span class="bday-cake">🎂</span>
+    <span class="bday-text">Happy Birthday, ${who.replace(/</g,'&lt;')}!</span>
+    <button class="bday-x" title="Dismiss">✕</button>`;
+  el.querySelector(".bday-x").addEventListener("click",e=>{e.stopPropagation();pop();el.hidden=true;});
+  el.hidden=false;
+  // confetti once per day per device, so a reload doesn't spam it
+  const ck='bdayConfetti:'+key;
+  if(!localStorage.getItem(ck)){ localStorage.setItem(ck,"1"); confettiCelebrate(); }
+}
+function confettiCelebrate(){
+  let n=0;
+  const blast=()=>{
+    for(let i=0;i<70;i++){
+      const fromLeft=Math.random()<.5;
+      parts.push({x:fromLeft?60:innerWidth-60,y:innerHeight-150,
+        vx:(fromLeft?1:-1)*(Math.random()*9+4),vy:-Math.random()*15-6,
+        g:.4+Math.random()*.2,s:6+Math.random()*8,
+        c:COLORS[i%COLORS.length],r:Math.random()*6,vr:(Math.random()-.5)*.4,life:1});
+    }
+    if(++n<3) setTimeout(blast,350);
+  };
+  blast();
+}
+
 /* First Five editor: name + color + avatar (emoji or cartoon filename) per kid,
    plus the six feeling faces. */
 function renderFirstFiveEditor(){
@@ -2457,7 +2581,7 @@ function setTab(name){
   document.querySelectorAll('.set-panel').forEach(p=>p.classList.toggle('active',p.dataset.panel===name));
 }
 $("#setNav").addEventListener("click",e=>{ const t=e.target.closest('.set-tab'); if(t){ pop(); setTab(t.dataset.tab); } });
-$("#settingsBtn").addEventListener("click",()=>{pop();$("#settings").classList.add("on");setTab('appearance');renderThemePicker();renderCountdownEditor();renderFirstFiveEditor();loadChores().then(()=>{renderChoreEditor();renderChores();});loadChoreIdeas().then(()=>{renderChoreIdeasEditor();renderChores();});loadShopping().then(()=>{renderGroceryEditor();renderGrocery();});loadStaples().then(()=>{renderStaplesEditor();renderGrocery();});loadFeeds().then(()=>{renderPeopleEditor();renderFeedEditor();});});
+$("#settingsBtn").addEventListener("click",()=>{pop();$("#settings").classList.add("on");setTab('appearance');renderThemePicker();renderCountdownEditor();renderFirstFiveEditor();loadBirthdays().then(()=>{renderBirthdayEditor();renderBirthdayBanner();});loadChores().then(()=>{renderChoreEditor();renderChores();});loadChoreIdeas().then(()=>{renderChoreIdeasEditor();renderChores();});loadShopping().then(()=>{renderGroceryEditor();renderGrocery();});loadStaples().then(()=>{renderStaplesEditor();renderGrocery();});loadFeeds().then(()=>{renderPeopleEditor();renderFeedEditor();});});
 $("#sDone").addEventListener("click",()=>{pop();closeEmojiPicker();$("#settings").classList.remove("on");});
 $("#settings").addEventListener("click",e=>{if(e.target.id==="settings"){pop();closeEmojiPicker();$("#settings").classList.remove("on");}});
 
@@ -2918,6 +3042,9 @@ setInterval(loadWeather, 15*60*1000); // refresh weather every 15 min
 
 /* on-this-day: load today's quips, rotate through them, refresh once an hour
    (the server only re-fetches Wikipedia when the date rolls over) */
+/* birthdays: load + show the banner (with confetti) if today is someone's */
+loadBirthdays().then(renderBirthdayBanner);
+
 loadOnThisDay().then(renderOnThisDay);
 otdRotate=setInterval(otdNext, 3*60*1000);          // next quip every 3 min
 setInterval(()=>{ loadOnThisDay().then(renderOnThisDay); }, 60*60*1000);
